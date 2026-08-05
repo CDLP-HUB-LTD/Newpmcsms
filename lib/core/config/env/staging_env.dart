@@ -4,6 +4,7 @@ class StagingEnv implements BaseEnv {
   factory StagingEnv() => _instance;
   StagingEnv._internal();
   static final StagingEnv _instance = StagingEnv._internal();
+
   @override
-  String get baseUrl => 'http://localhost:3000';
+  String get baseUrl => 'https://demo.autobiz.app';
 }

@@ -99,7 +99,10 @@ class _OnboardingViewState extends State<OnboardingView> {
                 AppSendButton(
                   backgroundColor: AppColors.white,
                   onTap: () {
-                    context.pushReplacementNamed(LoginView.routeName);
+                    context.pushReplacement(
+                      MaterialPageRoute(
+                          builder: (context) => const LoginView()),
+                    );
                   },
                   title: 'Log in',
                   textColor: AppColors.black,

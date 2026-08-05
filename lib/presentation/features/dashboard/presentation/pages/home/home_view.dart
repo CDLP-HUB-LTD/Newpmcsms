@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pmcsms/data/data/local_data_source/local_storage_impl.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/notifier/get_balance_notifier.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/view/side_bar.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/home/widgets/complete_setup_section.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/widgets/dashboard_appbar.dart';
@@ -30,22 +31,49 @@ class _DashboardState extends ConsumerState<HomeView> {
 
   @override
   void initState() {
-    getUserNameEmail();
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ref
-          .read(getWalletHistoryNotifier.notifier)
-          .getWalletHistory(data: data);
-    });
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // ✅ Wait for token FIRST before firing any requests
+      final token = await ref.read(localStorageProvider).getUserApiKey();
+      if (token == null || token.isEmpty) return;
+
+      // ✅ Fire all requests together after confirming token exists
+      await Future.wait<dynamic>([
+        ref
+            .read(getWalletHistoryNotifier.notifier)
+            .getWalletHistory(data: data),
+        ref.read(getWalletBalanceNotifier.notifier).getWalletBalance(),
+      ]);
+    });
+
+    // ✅ Also use provider here instead of SecureStorage()
+    _loadUserInfo();
   }
 
+  Future<void> _loadUserInfo() async {
+    final storage = ref.read(localStorageProvider);
+    final userNameStorage = await storage.getUserFirstName();
+    final emailStorage = await storage.getUserEmail();
+    if (mounted) {
+      setState(() {
+        userName = userNameStorage ?? '';
+        email = emailStorage ?? '';
+      });
+    }
+  }
+
+  // ... rest of the class unchanged
+
   getUserNameEmail() async {
-    final userNameStorage = await SecureStorage().getUserFirstName();
-    final emailStorage = await SecureStorage().getUserEmail();
-    setState(() {
-      userName = userNameStorage.toString();
-      email = emailStorage.toString();
-    });
+    final storage = ref.read(localStorageProvider); // ← use provider
+    final userNameStorage = await storage.getUserFirstName();
+    final emailStorage = await storage.getUserEmail();
+    if (mounted) {
+      setState(() {
+        userName = userNameStorage ?? '';
+        email = emailStorage ?? '';
+      });
+    }
   }
 
   String getGreetingMessage() {

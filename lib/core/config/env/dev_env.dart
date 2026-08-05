@@ -4,7 +4,8 @@ class DevEnv implements BaseEnv {
   factory DevEnv() => _instance;
   DevEnv._internal();
   static final DevEnv _instance = DevEnv._internal();
+
   @override
-  String get baseUrl => 'http://localhost:3000';
-  //String get baseUrl => 'https://digit-send-backend.onrender.com';
+  // If your dev team uses a different staging link, swap it here. Otherwise use production:
+  String get baseUrl => 'https://demo.autobiz.app';
 }

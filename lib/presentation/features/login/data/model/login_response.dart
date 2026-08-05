@@ -425,8 +425,8 @@ class BroadbandService {
   final String? availableServiceConvinienceFee;
   final String? availableServicePriceEditable;
   final String? isVerifyDevice;
-  final int? discountedPrice;
-  final int? availableServiceActualPrice;
+  final num? discountedPrice; // 👈 Change to num? or double?
+  final num? availableServiceActualPrice; // 👈 Change to num? or double?
 
   BroadbandService({
     this.availableServiceId,
@@ -453,11 +453,11 @@ class BroadbandService {
       availableServiceConvinienceFee: json['available_service_convinience_fee'],
       availableServicePriceEditable: json['available_service_price_editable'],
       isVerifyDevice: json['is_verify_device'],
-      discountedPrice: json['discounted_price'],
-      availableServiceActualPrice: json['available_service_actual_price'],
+      discountedPrice: json['discounted_price'], // Safe if using num?
+      availableServiceActualPrice:
+          json['available_service_actual_price'], // Safe if using num?
     );
   }
-
   Map<String, dynamic> toJson() {
     return {
       'available_service_id': availableServiceId,
@@ -610,8 +610,8 @@ class SmileDatum {
   final String? availableServiceConvinienceFee;
   final String? availableServicePriceEditable;
   final String? isVerifyDevice;
-  final int? discountedPrice;
-  final int? availableServiceActualPrice;
+  final num? discountedPrice; // 👈 Change to num? or double?
+  final num? availableServiceActualPrice; // 👈 Change to num? or double?
 
   SmileDatum({
     this.availableServiceId,
@@ -638,8 +638,9 @@ class SmileDatum {
             json["available_service_convinience_fee"],
         availableServicePriceEditable: json["available_service_price_editable"],
         isVerifyDevice: json["is_verify_device"],
-        discountedPrice: json["discounted_price"],
-        availableServiceActualPrice: json["available_service_actual_price"],
+        discountedPrice: json["discounted_price"], // Safe if using num?
+        availableServiceActualPrice:
+            json["available_service_actual_price"], // Safe if using num?
       );
 
   Map<String, dynamic> toJson() => {

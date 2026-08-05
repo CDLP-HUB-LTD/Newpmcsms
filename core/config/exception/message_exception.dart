@@ -1,17 +1,17 @@
-class MessageException implements Exception {
-  MessageException({required this.message});
-  final String message;
+// class MessageException implements Exception {
+//   MessageException({required this.message});
+//   final String message;
 
-  @override
-  String toString() {
-    return message;
-  }
-}
+//   @override
+//   String toString() {
+//     return message;
+//   }
+// }
 
-extension ExceptionExtension on String? {
-  MessageException get toException {
-    return MessageException(
-      message: this ?? 'An error occurred',
-    );
-  }
-}
+// extension ExceptionExtension on String? {
+//   MessageException get toException {
+//     return MessageException(
+//       message: this ?? 'An error occurred',
+//     );
+//   }
+// }

@@ -10,11 +10,12 @@ class LoginNotifierNotifier extends AutoDisposeNotifier<LoginNotifierState> {
   LoginNotifierNotifier();
 
   late LoginRepository _loginRepository;
+  late SecureStorage _storage; // ← add this
 
   @override
   LoginNotifierState build() {
     _loginRepository = ref.read(loginRepositoryProvider);
-
+    _storage = ref.read(localStorageProvider); // ← add this
     return LoginNotifierState.initial();
   }
 
@@ -24,24 +25,24 @@ class LoginNotifierNotifier extends AutoDisposeNotifier<LoginNotifierState> {
     required void Function(String message) onSuccess,
   }) async {
     state = state.copyWith(loginState: LoadState.loading);
-
     try {
       final value = await _loginRepository.login(data);
       debugLog(data);
       if (!value.status) throw value.serverMessage.toString();
 
-      await SecureStorage().saveUserApiKey(value.data!.data!.apiKey!);
-      await SecureStorage()
-          .saveUserEmail(value.data!.data!.userSettings!.email!);
-      await SecureStorage()
+      // ✅ Use _storage (from provider) instead of SecureStorage() directly
+      await _storage.saveUserApiKey(value.data!.data!.apiKey!);
+      await _storage.saveUserEmail(value.data!.data!.userSettings!.email!);
+      await _storage
           .saveUserFirstName(value.data!.data!.userSettings!.firstname!);
-      await SecureStorage()
+      await _storage
           .saveUserFullName(value.data!.data!.userSettings!.fullname!);
-      await SecureStorage().saveLoginResponse(value.data!);
+      await _storage.saveLoginResponse(value.data!);
 
-      state =
-          state.copyWith(loginState: LoadState.idle, loginResponse: value.data);
-      // ref.read(getTransactionPinNotifier.notifier);
+      state = state.copyWith(
+        loginState: LoadState.idle,
+        loginResponse: value.data,
+      );
       onSuccess(value.data!.serverMessage!);
     } catch (e) {
       onError(e.toString());

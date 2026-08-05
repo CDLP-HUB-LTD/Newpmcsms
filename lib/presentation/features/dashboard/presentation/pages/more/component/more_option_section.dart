@@ -2,11 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:pmcsms/core/extensions/build_context_extension.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/analytics/view/analytics_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/more/presentation/widgets/option_widget.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/more/presentation/widgets/profile_option_widget.dart';
 import 'package:pmcsms/presentation/features/faq/presentation/faq_view.dart';
+import 'package:pmcsms/presentation/features/history/views/history_view.dart';
 import 'package:pmcsms/presentation/features/kyc/presentation/view/kyc_view.dart';
 import 'package:pmcsms/presentation/features/manage_account/presentation/view/manage_account_view.dart';
+import 'package:pmcsms/presentation/features/notification/views/notification_settings.dart';
+import 'package:pmcsms/presentation/features/referral/views/referrals_view.dart';
+import 'package:pmcsms/presentation/features/reset_password/presentation/view/reset_password_view.dart';
+import 'package:pmcsms/presentation/features/senderid/views/sender_id_view.dart';
+import 'package:pmcsms/presentation/features/transaction_pin/presentation/views/change_payment_pin_view.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
 class MoreOptionSection extends StatelessWidget {
@@ -36,28 +43,40 @@ class MoreOptionSection extends StatelessWidget {
             ],
           ),
           const VerticalSpacing(48),
-          const ProfileOptionWidget(
+          ProfileOptionWidget(
             title: 'SERVICES',
             children: [
               OptionWidget(
                 icon: 'assets/icons/referrals.svg',
                 title: 'Referrals',
+                onTap: () {
+                  Navigator.pushNamed(context, ReferralsView.routeName);
+                },
               ),
-              VerticalSpacing(20),
+              const VerticalSpacing(20),
               OptionWidget(
                 icon: 'assets/icons/user_id.svg',
                 title: 'User ID',
+                onTap: () {
+                  Navigator.pushNamed(context, SenderIdView.routeName);
+                },
               ),
-              VerticalSpacing(20),
+              const VerticalSpacing(20),
               OptionWidget(
                 icon: 'assets/icons/user_id.svg',
                 title: 'Messaging history ',
+                onTap: () {
+                  Navigator.pushNamed(context, HistoryView.routeName);
+                },
               ),
-              VerticalSpacing(20),
+              const VerticalSpacing(20),
               OptionWidget(
                 icon: 'assets/icons/analytics.svg',
                 title: 'Analytics',
-              )
+                onTap: () {
+                  Navigator.pushNamed(context, AnalyticsView.routeName);
+                },
+              ),
             ],
           ),
           const VerticalSpacing(48),
@@ -92,22 +111,32 @@ class MoreOptionSection extends StatelessWidget {
             ],
           ),
           const VerticalSpacing(48),
-          const ProfileOptionWidget(
+          ProfileOptionWidget(
             title: 'SECURITY & PREFRENCE',
             children: [
               OptionWidget(
                 icon: 'assets/icons/lock.svg',
                 title: 'Reset password',
+                onTap: () {
+                  Navigator.pushNamed(context, ResetPasswordView.routeName);
+                },
               ),
-              VerticalSpacing(20),
+              const VerticalSpacing(20),
               OptionWidget(
                 icon: 'assets/icons/reset_pin.svg',
                 title: 'Reset transaction pin',
+                onTap: () {
+                  Navigator.pushNamed(context, ChangePaymentPinView.routeName);
+                },
               ),
-              VerticalSpacing(20),
+              const VerticalSpacing(20),
               OptionWidget(
                 icon: 'assets/icons/notification_settings.svg',
                 title: 'Notification settings ',
+                onTap: () {
+                  Navigator.pushNamed(
+                      context, NotificationSettingView.routeName);
+                },
               ),
             ],
           ),

@@ -1,8 +1,6 @@
 import 'dart:async';
-
 import 'package:dio/dio.dart';
 import 'package:pmcsms/core/config/exception/logger.dart';
-
 import 'package:pmcsms/data/data/local_data_source/local_storage_impl.dart';
 
 class HeaderInterCeptor extends Interceptor {
@@ -11,32 +9,11 @@ class HeaderInterCeptor extends Interceptor {
     required this.secureStorage,
     required this.onTokenExpired,
   });
+
   final Dio dio;
   final SecureStorage secureStorage;
   final void Function() onTokenExpired;
 
-  final _authRoutes = [
-    '/login',
-    '/register',
-    '/auth/create-pin',
-    '/resendtoken',
-    '/user/logout',
-    '/auth/forgot-password',
-    '/auth/reset-password',
-    '/auth/verify-signup-otp',
-    '/user/change-pin',
-    '/user/change-password',
-    '/user/delete',
-  ];
-
-  final _optionalRoutes = [
-    '/user/change-pin',
-    '/user/change-password',
-    '/auth/recover',
-    '/user/logout',
-    '/user/refer',
-    '/user/delete',
-  ];
   @override
   FutureOr<dynamic> onRequest(
     RequestOptions options,
@@ -45,40 +22,40 @@ class HeaderInterCeptor extends Interceptor {
     try {
       final apiKey = await secureStorage.getUserApiKey();
       final token = await secureStorage.getUserToken();
-      debugLog("This is user accesstoken $apiKey");
-      // log("This is user token $token");
 
-      debugLog('[ACCESS TOKEN]$apiKey');
-      debugLog('[TOKEN]$token');
+      // Explicitly check for actual data and avoid string-coerced "null"
+      final cleanToken = (token != null && token.toString() != 'null')
+          ? token.toString().trim()
+          : '';
+      final cleanApiKey = (apiKey != null && apiKey.toString() != 'null')
+          ? apiKey.toString().trim()
+          : '';
 
-      if (_optionalRoutes.contains(options.path) &&
-          token.toString().isNotEmpty) {
-        options.headers['Authorization'] = 'Bearer $token';
+      debugLog('[ACCESS TOKEN] $cleanApiKey');
+      debugLog('[TOKEN] $cleanToken');
+      debugLog('[API_KEY from storage] $cleanApiKey');
+      debugLog('[TOKEN from storage] $cleanToken');
+      debugLog('[RESOLVED HEADER] ${options.headers['Authorization']}');
+
+      if (cleanToken.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $cleanToken';
+      } else if (cleanApiKey.isNotEmpty) {
+        options.headers['Authorization'] = 'Bearer $cleanApiKey';
       } else {
-        options.headers['Authorization'] = 'Bearer $apiKey';
+        // Remove the header completely if no credentials exist yet to avoid sending malformed strings
+        options.headers.remove('Authorization');
+        debugLog(
+            '⚠️ Warning: No valid Authorization credentials found in storage.');
       }
-
-      // if (accessToken.toString().isNotEmpty) {
-      //   options.headers['Authorization'] = 'Bearer $accessToken';
-      // }
     } catch (e) {
-      debugLog(e);
+      debugLog('Error extracting headers inside interceptor: $e');
     }
 
-    // try {
-    //   final token = userRepository.getToken();
-    //   if (token.isNotEmpty) {
-    //     options.headers['Authorization'] = 'Bearer $token';
-    //     debugLog('[TOKEN]$token');
-    //   }
-    // } catch (e) {
-    //   debugLog(e);
-    // }
-    debugLog('[URL]${options.uri}');
+    debugLog('[URL] ${options.uri}');
     debugLog('[BODY] ${options.data}');
     debugLog('[METHOD] ${options.method}');
-    debugLog('[QUERIES]${options.queryParameters}');
-    debugLog('[HEADERS]${options.headers}');
+    debugLog('[QUERIES] ${options.queryParameters}');
+    debugLog('[HEADERS] ${options.headers}');
 
     handler.next(options);
     return options;
@@ -89,17 +66,14 @@ class HeaderInterCeptor extends Interceptor {
     DioException err,
     ErrorInterceptorHandler handler,
   ) async {
-    // if (err.response != null && err.response!.statusCode == 401) {
-    //   ref.read(logoutProvider.notifier).state = ActivityStatus.loggedOut;
-    //   return;
-    // }
     debugLog('[ERROR] ${err.requestOptions.uri}');
     debugLog('[ERROR] ${err.response}');
-    if (err.response?.statusCode == 401 ||
-        err.response?.statusCode == 403 &&
-            !_authRoutes.contains(err.requestOptions.path)) {
+
+    final statusCode = err.response?.statusCode;
+    if (statusCode == 401 || statusCode == 403) {
       onTokenExpired();
     }
+
     handler.next(err);
     return err;
   }
@@ -110,53 +84,8 @@ class HeaderInterCeptor extends Interceptor {
     ResponseInterceptorHandler handler,
   ) {
     debugLog(
-      '[RESPONSE FROM ${response.requestOptions.path}]: ${response.data}',
-    );
+        '[RESPONSE FROM ${response.requestOptions.path}]: ${response.data}');
     handler.next(response);
     return response;
   }
-}
-
-// Future<void> _refreshToken(
-//   DioException error,
-//   ErrorInterceptorHandler handler,
-//   Dio dio,
-//   UserRepository userRepository,
-//   Ref ref,
-// ) async {
-//   final refreshToken = userRepository.getRefreshToken();
-//   try {
-//     final r = await Dio().post<Response<Map<String, dynamic>?>>(
-//       '${AuthStrings.baseUrl}/auth/refresh-token',
-//       data: {
-//         'refreshToken': refreshToken,
-//       },
-//     );
-//     if (r.statusCode == 200) {
-//       userRepository.saveToken(r.data['newAccessToken']);
-//     }
-//     return handleError(handler, error, dio);
-//   } on DioException catch (_) {
-//     // ref.read(homeNotifier.notifier).logout();
-//     return;
-//   }
-// }
-
-Future<void> handleError(
-  ErrorInterceptorHandler handler,
-  DioException err,
-  Dio dio,
-) async {
-  final opts = Options(
-    method: err.requestOptions.method,
-    headers: err.requestOptions.headers,
-  );
-  final cloneReq = await dio.request<Map<String, dynamic>?>(
-    err.requestOptions.path,
-    options: opts,
-    data: err.requestOptions.data,
-    queryParameters: err.requestOptions.queryParameters,
-  );
-
-  return handler.resolve(cloneReq);
 }

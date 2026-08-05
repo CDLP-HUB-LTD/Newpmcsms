@@ -5,6 +5,7 @@ import 'package:pmcsms/core/extensions/build_context_extension.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/contact/presentation/view/add_contact_view.dart';
+import 'package:pmcsms/presentation/features/email_list/view/email_list_view.dart';
 import 'package:pmcsms/presentation/general_widgets/app_send_button.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
@@ -66,7 +67,8 @@ class ManageContactSection extends StatelessWidget {
                       child: AppSendButton(
                           textColor: AppColors.primary494949,
                           backgroundColor: AppColors.white,
-                          onTap: () {},
+                          onTap: () =>
+                              context.pushNamed(EmailListView.routeName),
                           title: 'Add to email list'),
                     ),
                   ],

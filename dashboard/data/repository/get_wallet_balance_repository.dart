@@ -2,20 +2,28 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pmcsms/core/config/base_response/base_response.dart';
 import 'package:pmcsms/core/config/exception/app_exception.dart';
-import 'package:pmcsms/data/data/remote_data_source/rest_client.dart';
+import 'package:pmcsms/core/network/dio_client.dart';
 import 'package:pmcsms/presentation/features/dashboard/data/model/get_balance_request.dart';
 import 'package:pmcsms/presentation/features/dashboard/data/model/get_balance_response.dart';
 
 class GetBalanceRepository {
-  GetBalanceRepository(this._restClient);
-  final RestClient _restClient;
+  GetBalanceRepository(this._dio);
+  final Dio _dio;
 
   Future<BaseResponse<GetBalanceResponse>> getWalletBalance({
     required GetBalanceRequest getBalanceRequest,
   }) async {
     try {
-      final response = await _restClient.getBalance(getBalanceRequest);
-      return BaseResponse(status: response.status!, data: response);
+      final response = await _dio.get(
+        '/pmcsms.php',
+        queryParameters: getBalanceRequest.toJson(), // ✅ not data:
+      );
+      final balanceResponse =
+          GetBalanceResponse.fromJson(response.data as Map<String, dynamic>);
+      return BaseResponse(
+        status: balanceResponse.status!,
+        data: balanceResponse,
+      );
     } on DioException catch (e) {
       return AppException.handleError(e);
     }
@@ -24,6 +32,6 @@ class GetBalanceRepository {
 
 final getWalletBalanceRepositoryProvider = Provider<GetBalanceRepository>(
   (ref) => GetBalanceRepository(
-    ref.read(restClientProvider),
+    ref.read(appDioProvider),
   ),
 );

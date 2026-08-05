@@ -52,14 +52,17 @@ class WalletHistoryRequest {
         endDate: json["end_date"],
       );
 
-  Map<String, dynamic> toJson() => {
-        "process": process,
-        "action": action,
-        "start": start,
-        "length": length,
-        "process_type": processType,
-        "status": status,
-        "start_date": startDate,
-        "end_date": endDate,
-      };
+  Map<String, dynamic> toJson() {
+    final map = <String, dynamic>{
+      'process': process,
+      'action': action,
+    };
+    if (start != null) map['start'] = start;
+    if (length != null) map['length'] = length;
+    if (processType != null) map['process_type'] = processType;
+    if (status != null) map['status'] = status;
+    if (startDate != null) map['start_date'] = startDate;
+    if (endDate != null) map['end_date'] = endDate;
+    return map;
+  }
 }

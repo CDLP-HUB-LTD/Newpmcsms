@@ -10,45 +10,36 @@ class AppException implements Exception {
     T Function(Map<String, dynamic>)? fromJsonT,
   }) {
     debugLog(e);
+
     if (e.response != null && DioExceptionType.badResponse == e.type) {
-      if ((e.response?.statusCode ?? 0) >= 500) {
+      final statusCode = e.response?.statusCode ?? 0;
+
+      if (statusCode >= 500) {
         return BaseResponse(
           status: false,
           serverMessage: Strings.serverError,
           data: data,
         );
       }
-      if (e.response?.statusCode == 413) {
+
+      if (statusCode == 413) {
         return BaseResponse(
           status: false,
           serverMessage: 'File size too large',
           data: data,
         );
       }
+
       if (e.response?.data is Map<String, dynamic>) {
-        debugLog(e.response?.data as Map<String, dynamic>);
-        debugLog(e.response?.data);
+        final responseData = e.response?.data as Map<String, dynamic>;
+        debugLog(responseData);
+
         return BaseResponse(
           status: false,
           data: data,
-          serverMessage: e.response?.data['server_message'],
-          errorData: e.response?.data['error_data'],
-
-          // (e.response?.data['error_data'] != null)
-          //     ? e.response?.data['error_data'].toString()
-          //     //? e.response?.data['error_data']['error_phone_exist']
-          //     : e.response?.data['server_message'],
+          serverMessage: responseData['server_message'] as String?,
+          errorData: responseData['error_data'],
         );
-        // if (fromJsonT != null) {
-        //   (e.response?.data as Map<String, dynamic>? ?? {})['data'] = fromJsonT(
-        //     (e.response?.data as Map<String, dynamic>? ?? {})['data']
-        //             as Map<String, dynamic>? ??
-        //         {},
-        //   );
-        // }
-        // return BaseResponse.fromMap(
-        //   e.response?.data as Map<String, dynamic>,
-        // );
       } else if (e.response?.data is String) {
         debugLog(e.response?.data);
         return BaseResponse(
@@ -57,6 +48,7 @@ class AppException implements Exception {
         );
       }
     }
+
     return BaseResponse(
       status: false,
       data: data,

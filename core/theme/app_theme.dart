@@ -51,7 +51,7 @@ class AppThemes {
         color: AppColors.white,
         elevation: .2,
       ),
-      bottomAppBarTheme: const BottomAppBarTheme(
+      bottomAppBarTheme: const BottomAppBarThemeData(
         color: AppColors.white,
       ),
     );
@@ -107,7 +107,7 @@ class AppThemes {
         color: AppColors.white,
         elevation: .2,
       ),
-      bottomAppBarTheme: const BottomAppBarTheme(
+      bottomAppBarTheme: const BottomAppBarThemeData(
         color: AppColors.white,
       ),
     );
