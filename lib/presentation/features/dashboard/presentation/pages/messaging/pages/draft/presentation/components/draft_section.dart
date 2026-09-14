@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/draft_service_tab.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/get_all_drafts_response.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/notifier/get_all_drafts_notifier.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/view/draft_details.dart';
@@ -10,8 +11,13 @@ import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 import 'package:pmcsms/utils/date_format.dart';
 
 class DraftsSection extends ConsumerStatefulWidget {
-  const DraftsSection({required this.filteredDrafts, super.key});
+  const DraftsSection({
+    required this.filteredDrafts,
+    required this.service,
+    super.key,
+  });
   final List<AllDraftsData>? filteredDrafts;
+  final DraftServiceTab service;
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _DraftsSectionState();
@@ -21,7 +27,9 @@ class _DraftsSectionState extends ConsumerState<DraftsSection> {
   @override
   void initState() {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ref.read(getAllDraftsNotifier.notifier).getAllDrafts();
+      await ref
+          .read(getAllDraftsNotifier.notifier)
+          .getAllDrafts(service: widget.service);
       _initializeDisplayedDrafts();
     });
     super.initState();
@@ -98,6 +106,8 @@ class _DraftsSectionState extends ConsumerState<DraftsSection> {
                         MaterialPageRoute(
                             builder: (_) => DraftDetails(
                                   draftId: "${data?.draftId}",
+                                  service: widget.service,
+                                  action: 'view',
                                 ))),
                     child: Column(
                       children: [

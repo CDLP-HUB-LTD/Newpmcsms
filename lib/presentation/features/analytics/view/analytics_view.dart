@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/core/utils/enums.dart';
+import 'package:pmcsms/presentation/features/analytics/presentation/model/cost_insight_response.dart';
+import 'package:pmcsms/presentation/features/analytics/presentation/notifier/cost_insight_notifier.dart';
+import 'package:pmcsms/presentation/features/analytics/presentation/notifier/message_insight_notifier.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
@@ -32,6 +36,49 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref
+          .read(messageInsightNotifier.notifier)
+          .getMessageInsight(_durationFromLabel(_insightTimeframe));
+      ref.read(costInsightNotifier.notifier).getCostInsight(
+            serviceType: _serviceTypeFromLabel(_costInsightType),
+            year: DateTime.now().year,
+          );
+    });
+  }
+
+  /// 'This week' / 'This month' / 'This year' -> 'this_week' / 'this_month' / 'this_year'.
+  /// Confirmed against the one sample given ('this_month'); the week/year
+  /// variants are inferred by pattern, not yet confirmed against the API.
+  String _durationFromLabel(String label) {
+    switch (label) {
+      case 'This week':
+        return 'this_week';
+      case 'This year':
+        return 'this_year';
+      case 'This month':
+      default:
+        return 'this_month';
+    }
+  }
+
+  /// 'SMS' / 'Email' / 'Voice SMS' -> 'sms' / 'email' / 'voicesms'.
+  /// Only 'sms' has been confirmed against a real response so far.
+  String _serviceTypeFromLabel(String label) {
+    switch (label) {
+      case 'Email':
+        return 'email';
+      case 'Voice SMS':
+        return 'voicesms';
+      case 'SMS':
+      default:
+        return 'sms';
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: const CustomAppBar(title: 'Analytics'),
@@ -41,7 +88,7 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildReportSection(),
+              // _buildReportSection(),
               const VerticalSpacing(20),
               _buildMessageInsightSection(),
               const VerticalSpacing(20),
@@ -55,61 +102,67 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> {
   }
 
   // ── 1. REPORT SECTION ──────────────────────────────────────────────────────
-  Widget _buildReportSection() {
-    return Container(
-      padding: EdgeInsets.all(16.r),
-      decoration: BoxDecoration(
-        color: AppColors.primaryF5F7F9,
-        borderRadius: BorderRadius.circular(12.r),
-      ),
-      child: Column(
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Report', style: context.textTheme.s16w600),
-              _buildDropdownFilter(
-                value: _reportTimeframe,
-                items: _timeframeOptions,
-                onChanged: (val) => setState(() => _reportTimeframe = val!),
-              ),
-            ],
-          ),
-          const VerticalSpacing(16),
-          const _ReportStatTile(
-            title: 'Total Messages',
-            count: '5,000,000',
-            iconColor: Colors.deepPurpleAccent,
-            bgColor: Color(0xFFF0EBFF),
-          ),
-          const VerticalSpacing(12),
-          const _ReportStatTile(
-            title: 'Delivered',
-            count: '5,000,000',
-            iconColor: Colors.green,
-            bgColor: Color(0xFFEAF8F0),
-          ),
-          const VerticalSpacing(12),
-          const _ReportStatTile(
-            title: 'Failed',
-            count: '5,000,000',
-            iconColor: Colors.redAccent,
-            bgColor: Color(0xFFFFEAEA),
-          ),
-          const VerticalSpacing(12),
-          const _ReportStatTile(
-            title: 'Pending',
-            count: '5,000,000',
-            iconColor: Colors.amber,
-            bgColor: Color(0xFFFFF7EA),
-          ),
-        ],
-      ),
-    );
-  }
+  // NOTE: no endpoint has been provided for this section yet. Values below
+  // remain hardcoded placeholders until pm_statistics exposes a report action.
+  // Widget _buildReportSection() {
+  //   return Container(
+  //     padding: EdgeInsets.all(16.r),
+  //     decoration: BoxDecoration(
+  //       color: AppColors.primaryF5F7F9,
+  //       borderRadius: BorderRadius.circular(12.r),
+  //     ),
+  //     child: Column(
+  //       children: [
+  //         Row(
+  //           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  //           children: [
+  //             Text('Report', style: context.textTheme.s16w600),
+  //             _buildDropdownFilter(
+  //               value: _reportTimeframe,
+  //               items: _timeframeOptions,
+  //               onChanged: (val) => setState(() => _reportTimeframe = val!),
+  //             ),
+  //           ],
+  //         ),
+  //         const VerticalSpacing(16),
+  //         const _ReportStatTile(
+  //           title: 'Total Messages',
+  //           count: '5,000,000',
+  //           iconColor: Colors.deepPurpleAccent,
+  //           bgColor: Color(0xFFF0EBFF),
+  //         ),
+  //         const VerticalSpacing(12),
+  //         const _ReportStatTile(
+  //           title: 'Delivered',
+  //           count: '5,000,000',
+  //           iconColor: Colors.green,
+  //           bgColor: Color(0xFFEAF8F0),
+  //         ),
+  //         const VerticalSpacing(12),
+  //         const _ReportStatTile(
+  //           title: 'Failed',
+  //           count: '5,000,000',
+  //           iconColor: Colors.redAccent,
+  //           bgColor: Color(0xFFFFEAEA),
+  //         ),
+  //         const VerticalSpacing(12),
+  //         const _ReportStatTile(
+  //           title: 'Pending',
+  //           count: '5,000,000',
+  //           iconColor: Colors.amber,
+  //           bgColor: Color(0xFFFFF7EA),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  // }
 
   // ── 2. MESSAGE INSIGHT SECTION ─────────────────────────────────────────────
   Widget _buildMessageInsightSection() {
+    final insightState = ref.watch(messageInsightNotifier);
+    final isLoading = insightState.state == LoadState.loading;
+    final data = insightState.data?.data;
+
     return Container(
       padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
@@ -126,94 +179,104 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> {
               _buildDropdownFilter(
                 value: _insightTimeframe,
                 items: _timeframeOptions,
-                onChanged: (val) => setState(() => _insightTimeframe = val!),
+                onChanged: (val) {
+                  setState(() => _insightTimeframe = val!);
+                  ref
+                      .read(messageInsightNotifier.notifier)
+                      .getMessageInsight(_durationFromLabel(val!));
+                },
               ),
             ],
           ),
           const VerticalSpacing(12),
-          RichText(
-            text: TextSpan(
-              children: [
-                TextSpan(
-                  text: '229 ',
-                  style: context.textTheme.s20w600
-                      .copyWith(color: AppColors.black),
-                ),
-                TextSpan(
-                  text: 'messages sent',
-                  style: context.textTheme.s12w400
-                      .copyWith(color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-          const VerticalSpacing(4),
-          Container(
-            padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
-            decoration: BoxDecoration(
-              color: Colors.green.withOpacity(0.12),
-              borderRadius: BorderRadius.circular(4.r),
-            ),
-            child: Text(
-              '↑ 12% from last week',
-              style:
-                  context.textTheme.s10w500.copyWith(color: Colors.green[700]),
-            ),
-          ),
-          const VerticalSpacing(20),
-          // Donut Chart Graphic
-          Center(
-            child: SizedBox(
-              width: 140.w,
-              height: 140.w,
-              child: Stack(
-                alignment: Alignment.center,
+          if (isLoading && data == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            RichText(
+              text: TextSpan(
                 children: [
-                  SizedBox(
-                    width: 140.w,
-                    height: 140.w,
-                    child: CircularProgressIndicator(
-                      value: 0.75,
-                      strokeWidth: 16.r,
-                      color: AppColors.primaryColor,
-                      backgroundColor: Colors.cyan,
-                    ),
+                  TextSpan(
+                    text: '${data?.total ?? 0} ',
+                    style: context.textTheme.s20w600
+                        .copyWith(color: AppColors.black),
                   ),
-                  Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        '+14%',
-                        style: context.textTheme.s16w600
-                            .copyWith(color: Colors.green[700]),
-                      ),
-                      Text(
-                        'from last week',
-                        style: context.textTheme.s10w400
-                            .copyWith(color: Colors.grey),
-                      ),
-                    ],
+                  TextSpan(
+                    text: 'messages sent',
+                    style: context.textTheme.s12w400
+                        .copyWith(color: Colors.grey[600]),
                   ),
                 ],
               ),
             ),
-          ),
-          const VerticalSpacing(24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
-            children: const [
-              _LegendItem(
-                  color: Colors.cyan, title: 'SMS', subTitle: '20 Messages'),
-              _LegendItem(
+            // No trend/growth figure is returned by the API for a single
+            // duration snapshot, so the previous "↑ 12% from last week" and
+            // "+14%" badges have been removed rather than shown with fake data.
+            const VerticalSpacing(20),
+            Center(
+              child: SizedBox(
+                width: 140.w,
+                height: 140.w,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    SizedBox(
+                      width: 140.w,
+                      height: 140.w,
+                      child: CircularProgressIndicator(
+                        value: (data?.total ?? 0) == 0
+                            ? 0
+                            : (data!.sms + data.email) / data.total,
+                        strokeWidth: 16.r,
+                        color: AppColors.primaryColor,
+                        backgroundColor: Colors.cyan,
+                      ),
+                    ),
+                    Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          '${data?.total ?? 0}',
+                          style: context.textTheme.s16w600,
+                        ),
+                        Text(
+                          'total',
+                          style: context.textTheme.s10w400
+                              .copyWith(color: Colors.grey),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const VerticalSpacing(24),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _LegendItem(
+                  color: Colors.cyan,
+                  title: 'SMS',
+                  subTitle: '${data?.sms ?? 0} Messages',
+                ),
+                _LegendItem(
                   color: AppColors.primaryColor,
                   title: 'Email',
-                  subTitle: '20 entries'),
-              _LegendItem(
+                  subTitle: '${data?.email ?? 0} Messages',
+                ),
+                _LegendItem(
                   color: Colors.redAccent,
                   title: 'Voice SMS',
-                  subTitle: '20 entries'),
-            ],
-          ),
+                  subTitle: '${data?.voicesms ?? 0} Messages',
+                ),
+              ],
+            ),
+            // whatsapp (data?.whatsapp) is returned by the API but has no
+            // legend slot in this UI yet — surfaced here as a TODO rather
+            // than silently dropped.
+          ],
         ],
       ),
     );
@@ -221,6 +284,21 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> {
 
   // ── 3. COST INSIGHT SECTION ────────────────────────────────────────────────
   Widget _buildCostInsightSection() {
+    final costState = ref.watch(costInsightNotifier);
+    final isLoading = costState.state == LoadState.loading;
+    final CostInsightData? data = costState.data?.data;
+
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'
+      // Aug–Dec exist in the response but the original bar chart only
+      // displayed 7 months; kept that layout rather than assuming a redesign.
+    ];
+    final maxValue = data == null
+        ? 1.0
+        : (data.monthlyCost.values.isEmpty
+            ? 1.0
+            : data.monthlyCost.values.reduce((a, b) => a > b ? a : b));
+
     return Container(
       padding: EdgeInsets.all(16.r),
       decoration: BoxDecoration(
@@ -237,38 +315,48 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> {
               _buildDropdownFilter(
                 value: _costInsightType,
                 items: _serviceTypeOptions,
-                onChanged: (val) => setState(() => _costInsightType = val!),
+                onChanged: (val) {
+                  setState(() => _costInsightType = val!);
+                  ref.read(costInsightNotifier.notifier).getCostInsight(
+                        serviceType: _serviceTypeFromLabel(val!),
+                        year: DateTime.now().year,
+                      );
+                },
               ),
             ],
           ),
           const VerticalSpacing(12),
-          Text(
-            'NGN200,000',
-            style: context.textTheme.s18w600,
-          ),
-          const VerticalSpacing(2),
-          Text(
-            '500 unit purchased',
-            style: context.textTheme.s12w400.copyWith(color: Colors.grey[600]),
-          ),
-          const VerticalSpacing(24),
-          // Bar Chart Graphics
-          SizedBox(
-            height: 160.h,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildBar('Jan', 0.2, false),
-                _buildBar('Feb', 0.4, false),
-                _buildBar('Mar', 0.25, false),
-                _buildBar('Apr', 0.5, false),
-                _buildBar('May', 0.65, false),
-                _buildBar('Jun', 0.9, true, tooltip: 'N20,000\n20 Unit'),
-                _buildBar('Jul', 0.45, false),
-              ],
+          if (isLoading && data == null)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24),
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else ...[
+            Text(
+              'NGN${(data?.total ?? 0).toStringAsFixed(2)}',
+              style: context.textTheme.s18w600,
             ),
-          ),
+            // "unit purchased" isn't returned by cost_insight — removed
+            // rather than shown as a fake figure.
+            const VerticalSpacing(24),
+            SizedBox(
+              height: 160.h,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: months.map((month) {
+                  final value = data?.monthlyCost[month] ?? 0.0;
+                  final heightFactor = maxValue == 0 ? 0.0 : (value / maxValue);
+                  return _buildBar(
+                    month,
+                    heightFactor,
+                    false,
+                    tooltip: value > 0 ? 'N${value.toStringAsFixed(2)}' : null,
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -297,7 +385,7 @@ class _AnalyticsViewState extends ConsumerState<AnalyticsView> {
         ],
         Container(
           width: 24.w,
-          height: 100.h * heightFactor,
+          height: 100.h * heightFactor.clamp(0.0, 1.0),
           decoration: BoxDecoration(
             color: isSelected
                 ? AppColors.primaryColor

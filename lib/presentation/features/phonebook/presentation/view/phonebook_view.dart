@@ -7,8 +7,17 @@ import 'package:pmcsms/presentation/features/phonebook/presentation/components/g
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 
 class PhonebookView extends ConsumerStatefulWidget {
-  const PhonebookView({super.key});
+  const PhonebookView({super.key, this.isPickerMode = false});
   static const String routeName = '/phonebookView';
+
+  /// When true, this screen is used to pick recipients (e.g. from
+  /// SmsView's "Add recipients from phone book") rather than to manage
+  /// contacts. Only the Contacts tab makes sense for picking individual
+  /// phone numbers — Groups is skipped entirely, since there's no
+  /// group->members expansion to turn a group pick into a recipient list.
+  /// Pops with a `List<String>` of selected phone numbers, or nothing if
+  /// the user backs out without selecting.
+  final bool isPickerMode;
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _PhonebookViewState();
@@ -26,6 +35,16 @@ class _PhonebookViewState extends ConsumerState<PhonebookView>
 
   @override
   Widget build(BuildContext context) {
+    if (widget.isPickerMode) {
+      return Scaffold(
+        appBar: const CustomAppBar(
+          backgroundColor: AppColors.white,
+          title: 'Select recipients',
+        ),
+        body: ContactComponent(isPickerMode: true),
+      );
+    }
+
     return Scaffold(
       appBar: const CustomAppBar(
         backgroundColor: AppColors.white,

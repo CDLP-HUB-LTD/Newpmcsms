@@ -22,7 +22,7 @@ class _BalanceViewState extends ConsumerState<BalanceView>
 
   @override
   void initState() {
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     super.initState();
   }
 
@@ -60,7 +60,7 @@ class _BalanceViewState extends ConsumerState<BalanceView>
                     Text('Wallet'),
                     Text('Cash back'),
                     Text('Sms'),
-                    Text('Email'),
+                    // Text('Email'),
                     Text('Voice SMS'),
                   ]),
             ),
@@ -72,7 +72,7 @@ class _BalanceViewState extends ConsumerState<BalanceView>
                 WalletComponent(),
                 CashbackComponent(),
                 SmsComponent(),
-                EmailComponent(),
+                //EmailComponent(),
                 VoiceSmsComponent()
               ],
             ),

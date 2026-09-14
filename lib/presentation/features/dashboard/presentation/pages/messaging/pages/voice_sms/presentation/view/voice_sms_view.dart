@@ -1,13 +1,19 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/voice_sms/data/voice_sms_notifier.dart';
+import 'package:pmcsms/presentation/features/history/views/history_view.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
+import 'package:record/record.dart';
 
 /// Where the recipient list is coming from.
 enum _RecipientSource { newEntry, emailList, uploadFile }
@@ -34,6 +40,9 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
 
   // Top-level tab: compose a new message vs. bulk-upload via template.
   bool _isUploadTab = false;
+  final AudioRecorder _audioRecorder = AudioRecorder();
+  bool _isRecording = false;
+  Timer? _recordTimer;
 
   final _subjectController = TextEditingController();
   final _recipientsController = TextEditingController();
@@ -43,13 +52,16 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
   _MessageSource _messageSource = _MessageSource.recentMessage;
 
   // TODO: replace with the real recording/upload state once wired up.
+  // NOTE: the send_voice_sms endpoint only accepts a plain text `message`
+  // field — there's no audio-upload field in the payload. Until a real
+  // audio-upload endpoint is provided, `_recordingPath` is treated purely
+  // as a "message is ready" flag and `_messageTextForSend()` below is what
+  // actually gets sent as `message`.
   String? _recordingPath;
   Duration? _recordingDuration;
 
   bool _saveAsDraft = false;
   bool _scheduleMessage = false;
-
-  bool _isSending = false;
 
   // ── UPLOAD-TEMPLATE WIZARD STATE ───────────────────────────────────────
   _UploadStep _uploadStep = _UploadStep.chooseTemplate;
@@ -76,37 +88,170 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    // Fetch sender IDs (pm_messaging / get_service_sender_id) once the
+    // widget is mounted.
+    Future.microtask(
+      () => ref.read(voiceSmsNotifierProvider.notifier).fetchSenderIds(),
+    );
+  }
+
+  @override
   void dispose() {
     _subjectController.dispose();
     _recipientsController.dispose();
     super.dispose();
   }
 
-  void _sendVoiceSms() {
+  /// Builds the raw comma-separated recipient string the API expects.
+  String? _recipientForSend() {
+    switch (_recipientSource) {
+      case _RecipientSource.newEntry:
+        final value = _recipientsController.text.trim();
+        return value.isEmpty ? null : value;
+      case _RecipientSource.emailList:
+      case _RecipientSource.uploadFile:
+        // TODO: these sources need to resolve to an actual phone-number
+        // list (from the selected email list / uploaded file) before they
+        // can be sent as the `recipient` string.
+        return null;
+    }
+  }
+
+  /// See the NOTE on `_recordingPath` above — this is a placeholder until
+  /// a real recording/transcript/audio-upload flow is wired up.
+  ///
+  Future<void> _startRecording() async {
+    try {
+      if (!await _audioRecorder.hasPermission()) {
+        _showSnack('Microphone permission is required to record',
+            isError: true);
+        return;
+      }
+      final dir = await getTemporaryDirectory();
+      final path =
+          '${dir.path}/voice_sms_${DateTime.now().millisecondsSinceEpoch}.m4a';
+
+      await _audioRecorder.start(const RecordConfig(), path: path);
+
+      setState(() {
+        _isRecording = true;
+        _recordingDuration = Duration.zero;
+        _recordingPath = null; // clear any previous recording
+      });
+
+      _recordTimer?.cancel();
+      _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+        if (!mounted) return;
+        setState(() {
+          _recordingDuration = (_recordingDuration ?? Duration.zero) +
+              const Duration(seconds: 1);
+        });
+      });
+    } catch (e) {
+      _showSnack('Could not start recording: $e', isError: true);
+    }
+  }
+
+  Future<void> _stopRecording() async {
+    try {
+      final path = await _audioRecorder.stop();
+      _recordTimer?.cancel();
+      if (!mounted) return;
+      setState(() {
+        _isRecording = false;
+        _recordingPath = path;
+      });
+    } catch (e) {
+      _showSnack('Could not stop recording: $e', isError: true);
+    }
+  }
+
+  String? _messageTextForSend() {
+    if (_recordingPath == null) return null;
+    return _subjectController.text.trim().isNotEmpty
+        ? _subjectController.text.trim()
+        : 'Voice message';
+  }
+
+  Future<void> _sendVoiceSms() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedSenderId == null) {
-      // TODO: surface via context.showError once a voice sms notifier exists
+      _showSnack('Please select a sender ID', isError: true);
       return;
     }
 
-    if (_recipientSource == _RecipientSource.newEntry &&
-        _recipientsController.text.trim().isEmpty) {
+    final recipient = _recipientForSend();
+    if (recipient == null) {
+      _showSnack('Please add at least one recipient', isError: true);
       return;
     }
 
-    if (_recordingPath == null) {
-      // TODO: surface "Please record or upload a voice message" error
+    final message = _messageTextForSend();
+    if (message == null) {
+      _showSnack('Please record or upload a voice message', isError: true);
       return;
     }
 
-    // TODO: wire up to a voice sms notifier, e.g.
-    // ref.read(voiceSmsNotifierProvider.notifier).sendBulkVoiceSms(request: ...)
-    setState(() => _isSending = true);
+    final success =
+        await ref.read(voiceSmsNotifierProvider.notifier).sendVoiceSms(
+              from: _selectedSenderId!,
+              recipient: recipient,
+              message: message,
+              scheduleDate: '', // "New"/send-now for the compose form.
+            );
+
+    if (!mounted) return;
+
+    if (success) {
+      _showSnack('Voice SMS sent successfully.');
+      _resetComposeForm();
+    } else {
+      final error = ref.read(voiceSmsNotifierProvider).errorMessage;
+      _showSnack(
+        error ??
+            'Operation could not be completed, Try again later or '
+                'contact admin for resolution.',
+        isError: true,
+      );
+    }
+  }
+
+  void _resetComposeForm() {
+    _recordTimer?.cancel();
+    setState(() {
+      _subjectController.clear();
+      _recipientsController.clear();
+      _recordingPath = null;
+      _recordingDuration = null;
+      _isRecording = false;
+      _saveAsDraft = false;
+      _scheduleMessage = false;
+    });
+  }
+
+  void _showSnack(String message, {bool isError = false}) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? Colors.red : Colors.green,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Surface async errors from sender-ID fetching too (send errors are
+    // handled inline in _sendVoiceSms so we can reset the form on success).
+    ref.listen<VoiceSmsState>(voiceSmsNotifierProvider, (previous, next) {
+      final newError = next.errorMessage;
+      if (newError != null && newError != previous?.errorMessage) {
+        _showSnack(newError, isError: true);
+      }
+    });
+
     return Scaffold(
       appBar: CustomAppBar(
         title: 'Voice SMS',
@@ -121,7 +266,7 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
             padding: const EdgeInsets.only(right: 16),
             child: GestureDetector(
               onTap: () {
-                // TODO: Route to Voice SMS history
+                Navigator.pushNamed(context, HistoryView.routeName);
               },
               child: SvgPicture.asset('assets/icons/clock.svg'),
             ),
@@ -216,6 +361,8 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
   }
 
   // ── UPLOAD TAB (template flow) ──────────────────────────────────────────
+  // NOTE: bulk-upload submission (`_submitUpload`) is not wired to a real
+  // endpoint yet — only the compose-form single send uses send_voice_sms.
   Widget _buildUploadTab() {
     switch (_uploadStep) {
       case _UploadStep.chooseTemplate:
@@ -777,9 +924,9 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
     if (!_canSubmitUpload || _uploadedFile == null) return;
     setState(() => _isSendingUpload = true);
 
-    // TODO: build the real bulk-upload request (recipient file, template
-    // type, voice file if Template 2, schedule fields) and call the
-    // voice-sms notifier.
+    // TODO: bulk-upload flow needs its own endpoint (recipient file,
+    // template type, voice file if Template 2, schedule fields) — not
+    // covered by the single send_voice_sms payload provided.
 
     setState(() => _isSendingUpload = false);
     setState(() {
@@ -907,8 +1054,10 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
     );
   }
 
-  // ── COMPOSE FORM (unchanged) ────────────────────────────────────────────
+  // ── COMPOSE FORM ─────────────────────────────────────────────────────
   Widget _buildComposeForm() {
+    final voiceSmsState = ref.watch(voiceSmsNotifierProvider);
+
     return SingleChildScrollView(
       child: Form(
         key: _formKey,
@@ -923,7 +1072,7 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
             const VerticalSpacing(24),
             Text('Sender ID', style: context.textTheme.s14w500),
             const VerticalSpacing(8),
-            _buildSenderIdDropdown(),
+            _buildSenderIdDropdown(voiceSmsState),
             const VerticalSpacing(6),
             InkWell(
               onTap: () {
@@ -982,13 +1131,13 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
               width: double.infinity,
               height: 50.h,
               child: ElevatedButton(
-                onPressed: _isSending ? null : _sendVoiceSms,
+                onPressed: voiceSmsState.isSending ? null : _sendVoiceSms,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryF9BC1F,
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8.r)),
                 ),
-                child: _isSending
+                child: voiceSmsState.isSending
                     ? const SizedBox(
                         height: 20,
                         width: 20,
@@ -1011,16 +1160,41 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
     );
   }
 
-  Widget _buildSenderIdDropdown() {
-    const senderIds = <String>[];
+  Widget _buildSenderIdDropdown(VoiceSmsState voiceSmsState) {
+    final senderIds = voiceSmsState.senderIds;
+
+    if (voiceSmsState.isLoadingSenderIds) {
+      return Container(
+        height: 48,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.primaryE6E6E6),
+          borderRadius: BorderRadius.circular(8.r),
+        ),
+        child: const SizedBox(
+          height: 18,
+          width: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
     return DropdownButtonFormField<String>(
-      initialValue: _selectedSenderId,
+      initialValue:
+          senderIds.contains(_selectedSenderId) ? _selectedSenderId : null,
       isExpanded: true,
-      decoration: _fieldDecoration(hintText: 'Select a user ID'),
+      decoration: _fieldDecoration(
+        hintText: senderIds.isEmpty
+            ? 'No sender IDs available'
+            : 'Select a sender ID',
+      ),
       items: senderIds
           .map((id) => DropdownMenuItem(value: id, child: Text(id)))
           .toList(),
-      onChanged: (value) => setState(() => _selectedSenderId = value),
+      onChanged: senderIds.isEmpty
+          ? null
+          : (value) => setState(() => _selectedSenderId = value),
       validator: (value) => value == null ? 'Sender ID is required' : null,
     );
   }
@@ -1155,23 +1329,29 @@ class _VoiceSmsViewState extends ConsumerState<VoiceSmsView> {
         ),
         child: InkWell(
           onTap: _messageSource == _MessageSource.recentMessage
-              ? () {
-                  // TODO: start/stop recording via a package like `record`,
-                  // then setState(() => _recordingPath = path).
-                }
+              ? (_isRecording ? _stopRecording : _startRecording)
               : () {
                   // TODO: open file picker restricted to .mp3
                 },
           child: Column(
             children: [
-              const Icon(Icons.mic_none_rounded, size: 28),
+              Icon(
+                _isRecording
+                    ? Icons.stop_circle_outlined
+                    : Icons.mic_none_rounded,
+                size: 28,
+                color: _isRecording ? Colors.red : null,
+              ),
               const SizedBox(height: 8),
               Text(
-                _messageSource == _MessageSource.recentMessage
-                    ? 'Record Message'
-                    : 'Upload mp3',
-                style: context.textTheme.s12w500
-                    .copyWith(color: AppColors.primaryF9BC1F),
+                _isRecording
+                    ? 'Recording... ${_formatDuration(_recordingDuration)}  (tap to stop)'
+                    : (_messageSource == _MessageSource.recentMessage
+                        ? 'Record Message'
+                        : 'Upload mp3'),
+                style: context.textTheme.s12w500.copyWith(
+                  color: _isRecording ? Colors.red : AppColors.primaryF9BC1F,
+                ),
               ),
             ],
           ),

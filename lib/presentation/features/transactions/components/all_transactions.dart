@@ -156,8 +156,8 @@ class _AllTransactionsState extends ConsumerState<AllTransactions> {
           (transaction.status ?? '').toString().toLowerCase() ==
               _selectedStatus.toLowerCase();
       final matchesMonth = transaction.date == null ||
-          (transaction.date.month == _selectedMonth.month &&
-              transaction.date.year == _selectedMonth.year);
+          (transaction.date!.month == _selectedMonth.month &&
+              transaction.date!.year == _selectedMonth.year);
       return matchesStatus && matchesMonth;
     }).toList();
   }
@@ -230,8 +230,7 @@ class _AllTransactionsState extends ConsumerState<AllTransactions> {
                                     categoryLabel:
                                         isCredit ? 'Received' : 'Sent',
                                     transactionId:
-                                        transaction.reference?.toString() ??
-                                            '—',
+                                        transaction.walletId?.toString() ?? '—',
                                     status: transaction.status ?? '—',
                                     transactionDate:
                                         _formatDate(transaction.date),

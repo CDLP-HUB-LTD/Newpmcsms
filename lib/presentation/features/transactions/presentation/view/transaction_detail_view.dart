@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/transactions/utils/receipt_generator.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
+import 'package:printing/printing.dart';
 
 class TransactionDetailView extends StatelessWidget {
   const TransactionDetailView({
@@ -37,6 +39,36 @@ class TransactionDetailView extends StatelessWidget {
   final String? extraLabel;
   final String? extraValue;
   final bool showActions;
+
+  Future<void> _generateReceipt(BuildContext context) async {
+    try {
+      final bytes = await ReceiptGenerator.build(
+        title: title,
+        amount: amount,
+        isCredit: isCredit,
+        categoryLabel: categoryLabel,
+        transactionId: transactionId,
+        status: status,
+        transactionDate: transactionDate,
+        category: category,
+        counterpartyLabel: counterpartyLabel,
+        counterpartyName: counterpartyName,
+        extraLabel: extraLabel,
+        extraValue: extraValue,
+      );
+
+      await Printing.sharePdf(
+        bytes: bytes,
+        filename: 'receipt_$transactionId.pdf',
+      );
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not generate receipt: $e')),
+        );
+      }
+    }
+  }
 
   Widget _row(BuildContext context, String label, Widget value) {
     return Padding(
@@ -156,7 +188,7 @@ class TransactionDetailView extends StatelessWidget {
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.black),
-                        onPressed: () {},
+                        onPressed: () => _generateReceipt(context),
                         child: const Text('Generate Receipt'),
                       ),
                     ),

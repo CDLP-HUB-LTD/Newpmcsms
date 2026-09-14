@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -6,6 +8,14 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_svg/svg.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/core/utils/enums.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/draft_service_tab.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/get_all_drafts_response.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/notifier/get_all_drafts_notifier.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/email/logic/email_notifier.dart';
+import 'package:pmcsms/presentation/features/email_list/presentation/models/email_list_model.dart';
+import 'package:pmcsms/presentation/features/history/views/history_view.dart';
+import 'package:pmcsms/presentation/features/senderid/views/create_sender_id_view.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
@@ -22,9 +32,14 @@ enum _UploadTemplate { template1, template2 }
 enum _UploadStep { chooseTemplate, uploadFile, message, timing }
 
 class EmailView extends ConsumerStatefulWidget {
-  const EmailView({super.key});
+  const EmailView({
+    super.key,
+    this.initialDraftTitle,
+    this.initialDraftMessage,
+  });
   static const String routeName = '/emailView';
-
+  final String? initialDraftTitle;
+  final String? initialDraftMessage;
   @override
   ConsumerState<ConsumerStatefulWidget> createState() => _EmailViewState();
 }
@@ -43,8 +58,19 @@ class _EmailViewState extends ConsumerState<EmailView> {
   _RecipientSource _recipientSource = _RecipientSource.newEntry;
   _MessageSource _messageSource = _MessageSource.newEntry;
 
-  // TODO: replace with the real draft model once wired up.
+  // ── EMAIL LIST recipient source state ──────────────────────────────────
+  final Set<String> _selectedContactEmails = {};
+
+  // ── UPLOAD FILE recipient source state (compose tab) ───────────────────
+  PlatformFile? _recipientUploadFile;
+  bool _isPickingRecipientFile = false;
+  List<String> _recipientFileEmails = [];
+  String? _recipientFileError;
+
+  // ── DRAFT message source state ──────────────────────────────────────────
   String? _selectedDraftTitle;
+  String? _selectedDraftBody;
+  bool _isLoadingDrafts = false;
 
   bool _saveAsDraft = false;
   bool _scheduleMessage = false;
@@ -80,31 +106,109 @@ class _EmailViewState extends ConsumerState<EmailView> {
     super.dispose();
   }
 
-  void _sendEmail() {
+  // ── SEND (compose form) ───────────────────────────────────────────────
+  Future<void> _sendEmail() async {
     if (!_formKey.currentState!.validate()) return;
 
     if (_selectedSenderId == null) {
-      // TODO: surface via context.showError once an email notifier exists
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a sender ID')),
+      );
       return;
     }
 
-    if (_recipientSource == _RecipientSource.newEntry &&
-        _recipientsController.text.trim().isEmpty) {
-      return;
+    String recipients;
+    switch (_recipientSource) {
+      case _RecipientSource.newEntry:
+        recipients = _recipientsController.text.trim();
+        if (recipients.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please add at least one recipient')),
+          );
+          return;
+        }
+        break;
+
+      case _RecipientSource.emailList:
+        if (_selectedContactEmails.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Please select at least one contact')),
+          );
+          return;
+        }
+        recipients = _selectedContactEmails.join(',');
+        break;
+
+      case _RecipientSource.uploadFile:
+        if (_recipientFileEmails.isEmpty) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(_recipientFileError ??
+                  'Please upload a file with at least one recipient'),
+            ),
+          );
+          return;
+        }
+        recipients = _recipientFileEmails.join(',');
+        break;
     }
 
-    if (_messageSource == _MessageSource.newEntry &&
-        _messageController.text.trim().isEmpty) {
-      return;
+    String message;
+    if (_messageSource == _MessageSource.newEntry) {
+      message = _messageController.text.trim();
+      if (message.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Message content cannot be blank')),
+        );
+        return;
+      }
+    } else {
+      if (_selectedDraftTitle == null || _selectedDraftBody == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a draft')),
+        );
+        return;
+      }
+      message = _selectedDraftBody!;
     }
 
-    if (_messageSource == _MessageSource.draft && _selectedDraftTitle == null) {
-      return;
-    }
-
-    // TODO: wire up to an email notifier, e.g.
-    // ref.read(emailNotifierProvider.notifier).sendBulkEmail(request: ...)
     setState(() => _isSending = true);
+
+    final success =
+        await ref.read(emailNotifierProvider.notifier).sendBulkEmail(
+              senderId: _selectedSenderId!,
+              subject: _subjectController.text.trim(),
+              message: '<p>$message</p>',
+              recipients: recipients,
+            );
+
+    if (!mounted) return;
+    setState(() => _isSending = false);
+
+    final errorMessage = ref.read(emailNotifierProvider).errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success
+            ? 'Email sent successfully'
+            : (errorMessage ?? 'Failed to send email')),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
+
+    if (success) {
+      _formKey.currentState!.reset();
+      _subjectController.clear();
+      _recipientsController.clear();
+      _messageController.clear();
+      setState(() {
+        _selectedContactEmails.clear();
+        _recipientUploadFile = null;
+        _recipientFileEmails = [];
+        _recipientFileError = null;
+        _selectedDraftTitle = null;
+        _selectedDraftBody = null;
+      });
+    }
   }
 
   @override
@@ -123,7 +227,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
             padding: const EdgeInsets.only(right: 16),
             child: GestureDetector(
               onTap: () {
-                // TODO: Route to Email history
+                Navigator.pushNamed(context, HistoryView.routeName);
               },
               child: SvgPicture.asset('assets/icons/clock.svg'),
             ),
@@ -375,13 +479,51 @@ class _EmailViewState extends ConsumerState<EmailView> {
     }
   }
 
-  // ── STEP 1: UPLOAD FILE ─────────────────────────────────────────────────
+  // ── FILE PARSING HELPERS ────────────────────────────────────────────────
+  //
+  // Expected upload format (per the on-screen hint): "Full name, Email
+  // address, phone(optional)". We parse plain CSV text client-side to
+  // resolve recipient emails. XLS/XLSX files can't be parsed without an
+  // extra package (e.g. `excel`) — if xlsx support is required end-to-end,
+  // add that dependency and branch on file extension here.
+  //
+  // TODO: confirm with backend whether the server would rather receive the
+  // raw file (multipart) and resolve recipients itself, instead of us
+  // parsing client-side and sending a flat comma-separated string through
+  // the existing sendBulkEmail(recipients: ...) contract.
+  List<String> _extractEmailsFromCsvBytes(List<int>? bytes) {
+    if (bytes == null) return [];
+    final content = utf8.decode(bytes, allowMalformed: true);
+    final lines = content
+        .split(RegExp(r'\r\n|\r|\n'))
+        .map((l) => l.trim())
+        .where((l) => l.isNotEmpty)
+        .toList();
+
+    final emailRegex = RegExp(r'^[\w\.\-\+]+@[\w\-]+\.[\w\-\.]+$');
+    final emails = <String>[];
+
+    for (var i = 0; i < lines.length; i++) {
+      final cols = lines[i].split(',').map((c) => c.trim()).toList();
+      for (final col in cols) {
+        if (emailRegex.hasMatch(col)) {
+          emails.add(col);
+          break; // one email per row
+        }
+      }
+    }
+
+    return emails.toSet().toList(); // de-dupe
+  }
+
+  // ── STEP 1: UPLOAD FILE (bulk-upload wizard) ────────────────────────────
   Future<void> _pickFile() async {
     setState(() => _isPickingFile = true);
     try {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['csv', 'xlsx', 'xls'],
+        withData: true,
       );
       if (result != null && result.files.isNotEmpty) {
         setState(() => _uploadedFile = result.files.single);
@@ -552,6 +694,8 @@ class _EmailViewState extends ConsumerState<EmailView> {
                     if (value) {
                       // TODO: call the AI content-generation endpoint and
                       // populate _uploadMessageController with the result.
+                      // No such endpoint is wired up on emailNotifierProvider
+                      // yet — flagging rather than guessing a contract.
                     }
                   },
                 ),
@@ -563,6 +707,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
         TextFormField(
           controller: _uploadMessageController,
           maxLines: 6,
+          onChanged: (_) => setState(() {}),
           decoration: _fieldDecoration(hintText: 'Type your message'),
         ),
         const VerticalSpacing(24),
@@ -697,18 +842,100 @@ class _EmailViewState extends ConsumerState<EmailView> {
       _uploadSendNow ||
       (_uploadScheduleDate != null && _uploadScheduleTime != null);
 
-  void _submitUpload() {
+  Future<void> _submitUpload() async {
     if (!_canSubmitUpload || _uploadedFile == null) return;
+
+    if (_selectedSenderId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a sender ID first')),
+      );
+      return;
+    }
+
+    final recipients = _extractEmailsFromCsvBytes(_uploadedFile!.bytes);
+    if (recipients.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content:
+              Text('No valid email addresses were found in the uploaded file'),
+        ),
+      );
+      return;
+    }
+
+    // Template 2 has an explicit message; Template 1 relies on
+    // server-side generated content, which isn't wired up yet.
+    final message = _selectedUploadTemplate == _UploadTemplate.template2
+        ? _uploadMessageController.text.trim()
+        : null;
+
+    if (_selectedUploadTemplate == _UploadTemplate.template2 &&
+        (message == null || message.isEmpty)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Message content cannot be blank')),
+      );
+      return;
+    }
+
+    if (_selectedUploadTemplate == _UploadTemplate.template1) {
+      // TODO: Template 1 needs a backend endpoint that accepts the raw file
+      // and generates per-recipient content server-side — sendBulkEmail
+      // requires a single `message` string, so there's no safe way to
+      // submit this template against the current contract without either
+      // fabricating placeholder copy or guessing at a new endpoint shape.
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Template 1 (auto-generated content) isn\'t wired up to a backend endpoint yet'),
+        ),
+      );
+      return;
+    }
+
+    // TODO: _uploadScheduleDate / _uploadScheduleTime / _uploadRepeat are
+    // collected but sendBulkEmail has no schedule/repeat params — confirm
+    // the real scheduling contract (likely a separate endpoint/action)
+    // before wiring these through.
+    if (!_uploadSendNow) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+              'Scheduled bulk sends aren\'t wired up to a backend endpoint yet — send now instead'),
+        ),
+      );
+      return;
+    }
+
     setState(() => _isSendingUpload = true);
 
-    // TODO: build the real bulk-upload request (file, template type,
-    // message body if Template 2, schedule fields) and call the email notifier.
+    final success =
+        await ref.read(emailNotifierProvider.notifier).sendBulkEmail(
+              senderId: _selectedSenderId!,
+              subject: _subjectController.text.trim(),
+              message: '<p>$message</p>',
+              recipients: recipients.join(','),
+            );
 
+    if (!mounted) return;
+
+    final errorMessage = ref.read(emailNotifierProvider).errorMessage;
     setState(() => _isSendingUpload = false);
-    setState(() {
-      _isUploadTab = false;
-      _resetUploadFlow();
-    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(success
+            ? 'Bulk email sent to ${recipients.length} recipient(s)'
+            : (errorMessage ?? 'Failed to send bulk email')),
+        backgroundColor: success ? Colors.green : Colors.red,
+      ),
+    );
+
+    if (success) {
+      setState(() {
+        _isUploadTab = false;
+        _resetUploadFlow();
+      });
+    }
   }
 
   Widget _buildTimingStep() {
@@ -830,7 +1057,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
     );
   }
 
-  // ── COMPOSE FORM (unchanged) ────────────────────────────────────────────
+  // ── COMPOSE FORM ─────────────────────────────────────────────────────────
   Widget _buildComposeForm() {
     return SingleChildScrollView(
       child: Form(
@@ -850,7 +1077,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
             const VerticalSpacing(6),
             InkWell(
               onTap: () {
-                // TODO: route to create sender ID flow
+                Navigator.pushNamed(context, CreateSenderIdView.routeName);
               },
               child: RichText(
                 text: TextSpan(
@@ -935,15 +1162,23 @@ class _EmailViewState extends ConsumerState<EmailView> {
   }
 
   Widget _buildSenderIdDropdown() {
-    const senderIds = <String>[];
+    final emailState = ref.watch(emailNotifierProvider);
+    final senderIds = emailState.senderIds;
+
     return DropdownButtonFormField<String>(
       initialValue: _selectedSenderId,
       isExpanded: true,
-      decoration: _fieldDecoration(hintText: 'Select a user ID'),
+      decoration: _fieldDecoration(
+        hintText: emailState.isLoadingSenderIds
+            ? 'Loading sender IDs...'
+            : 'Select a sender ID',
+      ),
       items: senderIds
           .map((id) => DropdownMenuItem(value: id, child: Text(id)))
           .toList(),
-      onChanged: (value) => setState(() => _selectedSenderId = value),
+      onChanged: emailState.isLoadingSenderIds
+          ? null
+          : (value) => setState(() => _selectedSenderId = value),
       validator: (value) => value == null ? 'Sender ID is required' : null,
     );
   }
@@ -1007,42 +1242,256 @@ class _EmailViewState extends ConsumerState<EmailView> {
             ),
           ],
         );
+
       case _RecipientSource.emailList:
-        return OutlinedButton.icon(
-          onPressed: () {
-            // TODO: open email list picker
-          },
-          icon: const Icon(Icons.contacts_outlined),
-          label: const Text('Add recipients from email list'),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            OutlinedButton.icon(
+              onPressed: _openContactPicker,
+              icon: const Icon(Icons.contacts_outlined),
+              label: Text(
+                _selectedContactEmails.isEmpty
+                    ? 'Add recipients from email list'
+                    : '${_selectedContactEmails.length} contact(s) selected',
+              ),
+            ),
+            if (_selectedContactEmails.isNotEmpty) ...[
+              const VerticalSpacing(8),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _selectedContactEmails
+                    .map((email) => Chip(
+                          label: Text(email, style: context.textTheme.s12w400),
+                          onDeleted: () => setState(
+                              () => _selectedContactEmails.remove(email)),
+                        ))
+                    .toList(),
+              ),
+            ],
+          ],
         );
+
       case _RecipientSource.uploadFile:
-        return Container(
-          width: double.infinity,
-          padding: EdgeInsets.symmetric(vertical: 24.h),
-          decoration: BoxDecoration(
-            border: Border.all(color: AppColors.primaryE6E6E6),
-            borderRadius: BorderRadius.circular(8.r),
-          ),
-          child: Column(
-            children: [
-              const Icon(Icons.cloud_upload_outlined, size: 32),
-              const SizedBox(height: 8),
-              Text('Upload your file here browse',
-                  style: context.textTheme.s12w400),
-              const SizedBox(height: 8),
-              InkWell(
-                onTap: () {
-                  // TODO: provide/download the CSV template
-                },
-                child: Text(
-                  'Download the csv format for upload here',
-                  style: context.textTheme.s12w500
-                      .copyWith(color: AppColors.primaryF9BC1F),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            InkWell(
+              onTap: _isPickingRecipientFile ? null : _pickRecipientFile,
+              borderRadius: BorderRadius.circular(8.r),
+              child: Container(
+                width: double.infinity,
+                padding: EdgeInsets.symmetric(vertical: 24.h),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.primaryE6E6E6),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: _isPickingRecipientFile
+                    ? const Center(
+                        child: SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : Column(
+                        children: [
+                          const Icon(Icons.cloud_upload_outlined, size: 32),
+                          const SizedBox(height: 8),
+                          Text('Upload your file here browse',
+                              style: context.textTheme.s12w400),
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: () {
+                              // TODO: provide/download the CSV template
+                            },
+                            child: Text(
+                              'Download the csv format for upload here',
+                              style: context.textTheme.s12w500
+                                  .copyWith(color: AppColors.primaryF9BC1F),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ),
+            if (_recipientUploadFile != null) ...[
+              const VerticalSpacing(12),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppColors.primaryE6E6E6),
+                  borderRadius: BorderRadius.circular(8.r),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.insert_drive_file_outlined, size: 20),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _recipientFileError ??
+                            '${_recipientUploadFile!.name} · ${_recipientFileEmails.length} email(s) found',
+                        style: context.textTheme.s12w400.copyWith(
+                          color:
+                              _recipientFileError != null ? Colors.red : null,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () => setState(() {
+                        _recipientUploadFile = null;
+                        _recipientFileEmails = [];
+                        _recipientFileError = null;
+                      }),
+                      child: Text(
+                        'Delete',
+                        style: context.textTheme.s12w500
+                            .copyWith(color: Colors.red),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
-          ),
+          ],
         );
+    }
+  }
+
+  Future<void> _pickRecipientFile() async {
+    setState(() => _isPickingRecipientFile = true);
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: const ['csv', 'xlsx', 'xls'],
+        withData: true,
+      );
+      if (result != null && result.files.isNotEmpty) {
+        final file = result.files.single;
+        final emails = _extractEmailsFromCsvBytes(file.bytes);
+        setState(() {
+          _recipientUploadFile = file;
+          _recipientFileEmails = emails;
+          _recipientFileError =
+              emails.isEmpty ? 'No valid email addresses found' : null;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isPickingRecipientFile = false);
+    }
+  }
+
+  // ── EMAIL LIST contact picker ────────────────────────────────────────────
+  //
+  // TODO: EmailListView currently sources its `_contacts` from a hardcoded
+  // local list (see email_list_view.dart), not a shared provider. Swap
+  // `_placeholderContacts` below for the real contacts provider once one
+  // exists — the picker UI and selection wiring are ready either way.
+  static const List<EmailContact> _placeholderContacts = [];
+
+  Future<void> _openContactPicker() async {
+    final contacts = _placeholderContacts; // TODO: source from provider
+    final result = await showModalBottomSheet<Set<String>>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        final localSelection = Set<String>.from(_selectedContactEmails);
+        return StatefulBuilder(
+          builder: (sheetContext, setSheetState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text('Select recipients',
+                            style: context.textTheme.s16w600),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(sheetContext),
+                        ),
+                      ],
+                    ),
+                    const VerticalSpacing(8),
+                    if (contacts.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: Text(
+                          'No contacts available yet. Add contacts from the '
+                          'Email List page first.',
+                          style: context.textTheme.s12w400
+                              .copyWith(color: Colors.grey[600]),
+                        ),
+                      )
+                    else
+                      Flexible(
+                        child: ListView.separated(
+                          shrinkWrap: true,
+                          itemCount: contacts.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, index) {
+                            final contact = contacts[index];
+                            final selected =
+                                localSelection.contains(contact.email);
+                            return CheckboxListTile(
+                              value: selected,
+                              activeColor: AppColors.primaryF9BC1F,
+                              title: Text(contact.name),
+                              subtitle: Text(contact.email),
+                              onChanged: (checked) => setSheetState(() {
+                                if (checked == true) {
+                                  localSelection.add(contact.email);
+                                } else {
+                                  localSelection.remove(contact.email);
+                                }
+                              }),
+                            );
+                          },
+                        ),
+                      ),
+                    const VerticalSpacing(16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primaryF9BC1F,
+                          shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () =>
+                            Navigator.pop(sheetContext, localSelection),
+                        child: Text(
+                          'Add ${localSelection.length} recipient(s)',
+                          style: context.textTheme.s14w600
+                              .copyWith(color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result != null) {
+      setState(() {
+        _selectedContactEmails
+          ..clear()
+          ..addAll(result);
+      });
     }
   }
 
@@ -1057,7 +1506,10 @@ class _EmailViewState extends ConsumerState<EmailView> {
         _radioOption(
           label: 'Draft',
           selected: _messageSource == _MessageSource.draft,
-          onTap: () => setState(() => _messageSource = _MessageSource.draft),
+          onTap: () async {
+            setState(() => _messageSource = _MessageSource.draft);
+            await _loadDraftsIfNeeded();
+          },
         ),
       ],
     );
@@ -1084,10 +1536,7 @@ class _EmailViewState extends ConsumerState<EmailView> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         OutlinedButton.icon(
-          onPressed: () {
-            // TODO: open a bottom sheet / picker of drafts and set
-            // _selectedDraftTitle on selection.
-          },
+          onPressed: _openDraftPicker,
           icon: const Icon(Icons.add),
           label: const Text('Select from draft'),
         ),
@@ -1098,6 +1547,110 @@ class _EmailViewState extends ConsumerState<EmailView> {
         ),
       ],
     );
+  }
+
+  // ── DRAFT picker ─────────────────────────────────────────────────────────
+  //
+  // TODO: `AllDraftsData` is assumed to expose a body-text field beyond
+  // `draftTitle` (e.g. `draftMessage` / `content`) — confirm the exact field
+  // name against the model and swap `_draftBody` below. Falling back to the
+  // title keeps this compiling/functional in the meantime rather than
+  // guessing at a field that may not exist.
+  String _draftBody(AllDraftsData draft) {
+    // TODO: replace with the real body field, e.g. `draft.draftMessage`.
+    return draft.draftTitle ?? '';
+  }
+
+  Future<void> _loadDraftsIfNeeded() async {
+    final drafts = ref.read(
+      getAllDraftsNotifier.select((v) => v.getAllDraftsResponse?.data ?? []),
+    );
+    if (drafts.isNotEmpty) return;
+
+    setState(() => _isLoadingDrafts = true);
+    await ref.read(getAllDraftsNotifier.notifier).getAllDrafts(
+          service: DraftServiceTab.sms,
+          start: 1,
+          length: 50,
+        );
+    if (mounted) setState(() => _isLoadingDrafts = false);
+  }
+
+  Future<void> _openDraftPicker() async {
+    await _loadDraftsIfNeeded();
+    if (!mounted) return;
+
+    final drafts = ref.read(
+      getAllDraftsNotifier.select((v) => v.getAllDraftsResponse?.data ?? []),
+    );
+
+    final selected = await showModalBottomSheet<AllDraftsData>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Select a draft', style: context.textTheme.s16w600),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(sheetContext),
+                    ),
+                  ],
+                ),
+                const VerticalSpacing(8),
+                if (_isLoadingDrafts)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (drafts.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Text(
+                      'No drafts saved yet.',
+                      style: context.textTheme.s12w400
+                          .copyWith(color: Colors.grey[600]),
+                    ),
+                  )
+                else
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: drafts.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, index) {
+                        final draft = drafts[index];
+                        return ListTile(
+                          title: Text(draft.draftTitle ?? 'Untitled draft'),
+                          onTap: () => Navigator.pop(sheetContext, draft),
+                        );
+                      },
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected != null) {
+      setState(() {
+        _selectedDraftTitle = selected.draftTitle ?? 'Untitled draft';
+        _selectedDraftBody = _draftBody(selected);
+      });
+    }
   }
 
   Widget _radioOption({
@@ -1170,5 +1723,13 @@ class _EmailViewState extends ConsumerState<EmailView> {
         borderSide: const BorderSide(color: AppColors.primaryF9BC1F),
       ),
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(emailNotifierProvider.notifier).fetchSenderIds();
+    });
   }
 }

@@ -16,7 +16,13 @@ dependencies:
     sdk: flutter
 
 
+
   file_picker: ^8.0.0  # Upgrade from 5.5.0 to a v2-compatible version  cupertino_icons: ^1.0.8
+  record: ^6.0.0
+  pdf: ^3.11.1
+  printing: ^5.13.4
+  path_provider: ^2.1.4
+  csv: ^6.0.0
   flutter_svg: ^2.0.17
   flutter_screenutil: ^5.9.3
   pinput: ^5.0.1
@@ -70,6 +76,8 @@ flutter:
     - assets/icons/
     - assets/images/
     - assets/logo/
+    - assets/fonts/NotoSans-Regular.ttf
+    - assets/fonts/NotoSans-Bold.ttf
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

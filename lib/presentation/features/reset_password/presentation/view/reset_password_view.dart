@@ -16,8 +16,15 @@ import 'package:pmcsms/presentation/general_widgets/page_loader.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
 class ResetPasswordView extends ConsumerStatefulWidget {
-  const ResetPasswordView({super.key});
+  /// The OTP the user just verified/received for the password-reset flow.
+  /// This has to come from wherever that OTP step happens (e.g. an
+  /// OTP-entry screen or the forgot-password flow) — it can no longer be
+  /// hardcoded, since the API validates it and rejects unknown codes.
+  const ResetPasswordView({super.key, required this.otpCode});
+
   static const String routeName = '/resetPassword';
+
+  final String otpCode;
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() =>
@@ -153,12 +160,12 @@ class _ResetPasswordViewState extends ConsumerState<ResetPasswordView> {
   void _resetPassword() {
     ref.read(resetPasswordNotifier.notifier).resetPassword(
           data: ResetPasswordRequest(
-              process: 'pm_auth',
-              action: 'change_password',
-              otpCode: '961137',
-              newPassword: _passwordController.text.trim(),
+              otpCode: widget.otpCode,
+              password: _passwordController.text.trim(),
               confirmPassword: _confirmPasswordController.text.trim()),
           onError: (error) {
+            // Surfaces the server's own message, e.g.
+            // "OTP Code provided does not exist"
             context.showError(message: error);
           },
           onSuccess: (message) {

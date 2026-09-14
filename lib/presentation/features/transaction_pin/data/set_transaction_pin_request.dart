@@ -1,47 +1,50 @@
-class SetTransactionPinRequest {
+class TransactionPinRequest {
   final String process;
-  final String action;
+  final String action; // 'set_transact_pin' | 'update_transact_pin'
   final String currentPin;
   final String newPin;
   final String confirmNewPin;
 
-  SetTransactionPinRequest({
-    required this.process,
+  const TransactionPinRequest({
+    this.process = 'pm_profile',
     required this.action,
     required this.currentPin,
     required this.newPin,
     required this.confirmNewPin,
   });
 
-  SetTransactionPinRequest copyWith({
-    String? process,
-    String? action,
-    String? currentPin,
-    String? newPin,
-    String? confirmNewPin,
+  /// First-time pin creation — there's no existing pin to verify, so
+  /// `current_pin` is a fixed placeholder rather than user input.
+  factory TransactionPinRequest.set({
+    required String newPin,
+    required String confirmNewPin,
   }) =>
-      SetTransactionPinRequest(
-        process: process ?? this.process,
-        action: action ?? this.action,
-        currentPin: currentPin ?? this.currentPin,
-        newPin: newPin ?? this.newPin,
-        confirmNewPin: confirmNewPin ?? this.confirmNewPin,
+      TransactionPinRequest(
+        action: 'set_transact_pin',
+        currentPin: '000000',
+        newPin: newPin,
+        confirmNewPin: confirmNewPin,
       );
 
-  factory SetTransactionPinRequest.fromJson(Map<String, dynamic> json) =>
-      SetTransactionPinRequest(
-        process: json["process"],
-        action: json["action"],
-        currentPin: json["current_pin"],
-        newPin: json["new_pin"],
-        confirmNewPin: json["confirm_new_pin"],
+  /// Changing an existing pin — `currentPin` must be the pin the user
+  /// actually typed in, since the server verifies it.
+  factory TransactionPinRequest.update({
+    required String currentPin,
+    required String newPin,
+    required String confirmNewPin,
+  }) =>
+      TransactionPinRequest(
+        action: 'update_transact_pin',
+        currentPin: currentPin,
+        newPin: newPin,
+        confirmNewPin: confirmNewPin,
       );
 
   Map<String, dynamic> toJson() => {
-        "process": process,
-        "action": action,
-        "current_pin": currentPin,
-        "new_pin": newPin,
-        "confirm_new_pin": confirmNewPin,
+        'process': process,
+        'action': action,
+        'current_pin': currentPin,
+        'new_pin': newPin,
+        'confirm_new_pin': confirmNewPin,
       };
 }

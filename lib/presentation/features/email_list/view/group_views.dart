@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/email_list/presentation/models/email_group.dart';
 import 'package:pmcsms/presentation/features/email_list/presentation/models/email_list_model.dart';
+import 'package:pmcsms/presentation/features/email_list/presentation/notifier/email_group_notifier.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
 /// Content for the "Groups" tab on the Email List screen.
@@ -22,15 +24,16 @@ class GroupsView extends ConsumerStatefulWidget {
 }
 
 class _GroupsViewState extends ConsumerState<GroupsView> {
-  // TODO: replace with ref.watch(groupsNotifier.select((v) => v.groups))
-  final List<EmailGroup> _groups = const [
-    EmailGroup(id: 'g1', name: 'Marketing', contactCount: 12),
-    EmailGroup(id: 'g2', name: 'Suppliers', contactCount: 5),
-    EmailGroup(id: 'g3', name: 'VIP Customers', contactCount: 3),
-  ];
-
   bool _isManageMode = false;
   final Set<int> _selectedIndexes = {};
+
+  @override
+  void initState() {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(emailGroupNotifier.notifier).getEmailGroups();
+    });
+    super.initState();
+  }
 
   void _showCreateGroupSheet() {
     final controller = TextEditingController();
@@ -74,8 +77,19 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
                 onPressed: () {
                   final name = controller.text.trim();
                   if (name.isEmpty) return;
-                  // TODO: call ref.read(groupsNotifier.notifier).create(name)
-                  Navigator.pop(sheetContext);
+                  ref.read(emailGroupNotifier.notifier).addEmailGroup(
+                        groupName: name,
+                        onError: (error) {
+                          Navigator.pop(sheetContext);
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(error)));
+                        },
+                        onSuccess: (message) {
+                          Navigator.pop(sheetContext);
+                          ScaffoldMessenger.of(context)
+                              .showSnackBar(SnackBar(content: Text(message)));
+                        },
+                      );
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryColor,
@@ -96,7 +110,7 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
     );
   }
 
-  void _confirmDeleteSelected() {
+  void _confirmDeleteSelected(List<EmailGroupData> groups) {
     showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -115,14 +129,24 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
                     .copyWith(color: Colors.grey[700])),
           ),
           TextButton(
-            onPressed: () {
-              // TODO: call ref.read(groupsNotifier.notifier)
-              //   .deleteMany(selected group ids)
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final ids = _selectedIndexes
+                  .map((i) => groups[i].groupId)
+                  .whereType<int>()
+                  .toList();
+              for (final id in ids) {
+                await ref.read(emailGroupNotifier.notifier).deleteEmailGroup(
+                      groupId: id,
+                      onError: (error) => ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text(error))),
+                      onSuccess: (_) {},
+                    );
+              }
               setState(() {
                 _selectedIndexes.clear();
                 _isManageMode = false;
               });
-              Navigator.pop(dialogContext);
             },
             child: Text('Delete',
                 style: context.textTheme.s14w600.copyWith(color: Colors.red)),
@@ -134,6 +158,9 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
 
   @override
   Widget build(BuildContext context) {
+    final groups = ref.watch(
+        emailGroupNotifier.select((v) => v.data?.data ?? <EmailGroupData>[]));
+
     return Stack(
       children: [
         Column(
@@ -142,7 +169,7 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('${_groups.length} Groups',
+                Text('${groups.length} Groups',
                     style: context.textTheme.s14w600),
                 Row(
                   children: [
@@ -150,7 +177,7 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
                       IconButton(
                         icon: const Icon(Icons.delete_outline,
                             size: 20, color: Colors.red),
-                        onPressed: _confirmDeleteSelected,
+                        onPressed: () => _confirmDeleteSelected(groups),
                       ),
                     IconButton(
                       icon: Icon(
@@ -170,7 +197,7 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
             ),
             const VerticalSpacing(8),
             Expanded(
-              child: _groups.isEmpty
+              child: groups.isEmpty
                   ? Center(
                       child: Text(
                         'No groups yet',
@@ -179,10 +206,10 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
                       ),
                     )
                   : ListView.separated(
-                      itemCount: _groups.length,
+                      itemCount: groups.length,
                       separatorBuilder: (_, __) => const Divider(height: 1),
                       itemBuilder: (_, index) {
-                        final group = _groups[index];
+                        final group = groups[index];
                         final isSelected = _selectedIndexes.contains(index);
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
@@ -194,19 +221,16 @@ class _GroupsViewState extends ConsumerState<GroupsView> {
                                       _selectedIndexes.add(index);
                                     }
                                   })
-                              : () {
-                                  // TODO: navigate to a Group Detail screen
-                                  // showing the contacts inside this group.
-                                },
+                              : null,
                           leading: CircleAvatar(
                             backgroundColor: AppColors.primaryE6E6E6,
                             child: const Icon(Icons.group_outlined,
                                 color: AppColors.primary1C1C1C),
                           ),
-                          title: Text(group.name,
+                          title: Text(group.groupName ?? '',
                               style: context.textTheme.s14w500),
                           subtitle: Text(
-                            '${group.contactCount} contacts',
+                            '${group.totalAddressBooks ?? 0} contacts',
                             style: context.textTheme.s12w400,
                           ),
                           trailing: _isManageMode

@@ -11,6 +11,7 @@ import 'package:pmcsms/presentation/features/phonebook/data/model/delete_group_r
 import 'package:pmcsms/presentation/features/phonebook/presentation/components/contact_component.dart';
 import 'package:pmcsms/presentation/features/phonebook/presentation/notifier/delete_group_notifier.dart';
 import 'package:pmcsms/presentation/features/phonebook/presentation/notifier/get_all_groups_notifier.dart';
+import 'package:pmcsms/presentation/features/phonebook/presentation/view/edit_group_view.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_search_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
@@ -151,6 +152,16 @@ class _GroupComponentState extends ConsumerState<GroupComponent> {
                                         itemBuilder: (context) {
                                           return [
                                             PopupMenuItem(
+                                              onTap: () {
+                                                context.pushNamed(
+                                                  EditGroupView.routeName,
+                                                  arguments: EditGroupArgs(
+                                                    groupId: group.groupId ?? 0,
+                                                    initialName:
+                                                        group.groupName ?? '',
+                                                  ),
+                                                );
+                                              },
                                               padding:
                                                   const EdgeInsets.symmetric(
                                                       horizontal: 1),
@@ -166,9 +177,8 @@ class _GroupComponentState extends ConsumerState<GroupComponent> {
                                                     style: context
                                                         .textTheme.s14w500
                                                         .copyWith(
-                                                      color: AppColors
-                                                          .primary1C1C1C,
-                                                    ),
+                                                            color: AppColors
+                                                                .primary1C1C1C),
                                                   ),
                                                 ],
                                               ),

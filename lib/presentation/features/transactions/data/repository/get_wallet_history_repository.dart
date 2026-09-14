@@ -14,10 +14,14 @@ class GetWalletHistoryRepository {
     WalletHistoryRequest request,
   ) async {
     try {
-// ✅ Correct — send as POST with body
-      final response = await _dio.post(
+      final response = await _dio.get(
         '/pmcsms.php',
-        data: {'process': 'pm_wallet', 'action': 'wallet_history'},
+        queryParameters: {
+          'process': 'pm_wallet',
+          'action': 'wallet_history',
+          ...request
+              .toJson(), // include whatever fields the request actually carries
+        },
       );
       final historyResponse =
           WalletHistoryResponse.fromJson(response.data as Map<String, dynamic>);

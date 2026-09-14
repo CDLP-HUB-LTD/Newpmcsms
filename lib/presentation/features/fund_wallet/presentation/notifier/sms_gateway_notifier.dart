@@ -45,33 +45,43 @@ class SmsGatewayNotifier extends StateNotifier<GatewayState> {
   String get _endpoint =>
       '${_dio.options.baseUrl.replaceAll(RegExp(r'/$'), '')}/pmcsms.php';
 
-  Future<void> fetchActiveGateways() async {
-    state = state.copyWith(isLoading: true);
+  String _absoluteUrl() {
+    return '${_dio.options.baseUrl.replaceAll(RegExp(r'/$'), '')}/pmcsms.php';
+  }
+
+  Future<int?> fetchActiveGateway() async {
     try {
       final response = await _dio.post(
-        _endpoint,
-        data: {"process": "pm_gateways", "action": "get_active_sms_gateways"},
+        _absoluteUrl(),
+        queryParameters: {
+          "process": "pm_gateways",
+          "action": "get_active_sms_gateways",
+        },
       );
 
-      if (response.data?['status'] == true) {
-        final List rawList = response.data['data'] ?? [];
-        final gateways = rawList.map((e) => SmsGateway.fromJson(e)).toList();
-        state = state.copyWith(isLoading: false, activeGateways: gateways);
-      } else {
-        throw Exception(response.data?['server_message'] ??
-            'Failed to load active gateways');
-      }
-    } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      final data = response.data;
+      if (data == null || data['status'] == false) return null;
+
+      final List gateways = data['data'] ?? [];
+      if (gateways.isEmpty) return null;
+
+      final first = gateways.first as Map<String, dynamic>;
+      final rawId = first['gateway_id'] ?? first['id'];
+      return rawId is int ? rawId : int.tryParse(rawId?.toString() ?? '');
+    } catch (_) {
+      return null;
     }
   }
 
   Future<void> fetchWalletPricing() async {
     state = state.copyWith(isLoading: true);
     try {
-      final response = await _dio.post(
+      final response = await _dio.get(
         _endpoint,
-        data: {"process": "pm_gateways", "action": "get_sms_wallet_pricing"},
+        queryParameters: {
+          "process": "pm_gateways",
+          "action": "get_sms_wallet_pricing"
+        },
       );
 
       if (response.data?['status'] == true) {

@@ -17,7 +17,7 @@ class GetBalanceRepository {
       // Use _dio.get and supply the JSON payload to the data parameter
       final response = await _dio.post(
         '/pmcsms.php',
-        data: getBalanceRequest.toJson(),
+        queryParameters: getBalanceRequest.toJson(),
       );
 
       // Parse the Map response into the GetBalanceResponse model

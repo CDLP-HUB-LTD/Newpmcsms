@@ -1,22 +1,20 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_svg/svg.dart';
+import 'package:pmcsms/core/extensions/overlay_extension.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/scheduled_sms/data/model/create_schedule_sms_request.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/scheduled_sms/data/notifier/create_scheduled_sms_notifier.dart';
+import 'package:pmcsms/presentation/features/senderid/presentation/notifier/sender_id_list_notifier.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
 enum _SendOption { now, schedule }
 
 class AddScheduleSmsView extends ConsumerStatefulWidget {
-  const AddScheduleSmsView({super.key, this.messageDraft});
+  const AddScheduleSmsView({super.key});
   static const String routeName = '/addScheduleSms';
-
-  /// Whatever payload was built on the previous compose step
-  /// (sender ID, recipients, message body, etc.). Passed through
-  /// here so it can be submitted together with the schedule fields.
-  final Object? messageDraft;
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() =>
@@ -24,6 +22,10 @@ class AddScheduleSmsView extends ConsumerStatefulWidget {
 }
 
 class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
+  final _recipientController = TextEditingController();
+  final _messageController = TextEditingController();
+
+  String? _selectedSenderId;
   _SendOption _sendOption = _SendOption.schedule;
 
   DateTime? _selectedDate;
@@ -37,6 +39,30 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
     'Monthly',
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    for (final c in [_recipientController, _messageController]) {
+      c.addListener(() => setState(() {}));
+    }
+    // Reuse the same sender-ID fetch used by the Sender ID module —
+    // scheduled SMS is a `pm_sms` action, so it needs 'sms' sender IDs,
+    // not 'voice' or 'email'.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(senderIdListNotifier.notifier).getSenderIds(
+            service: 'sms',
+            onError: (error) => context.showError(message: error),
+          );
+    });
+  }
+
+  @override
+  void dispose() {
+    _recipientController.dispose();
+    _messageController.dispose();
+    super.dispose();
+  }
+
   String _formatDate(DateTime date) {
     final day = date.day.toString().padLeft(2, '0');
     final month = date.month.toString().padLeft(2, '0');
@@ -48,6 +74,15 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
     final minute = time.minute.toString().padLeft(2, '0');
     final period = time.period == DayPeriod.am ? 'AM' : 'PM';
     return '${hour.toString().padLeft(2, '0')}:$minute $period';
+  }
+
+  /// API expects "yyyy-MM-dd HH:mm:ss" per the sample:
+  /// "schedule_date": "2026-08-10 09:00:00".
+  String _toApiDateTime(DateTime date, TimeOfDay time) {
+    final dt =
+        DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    String two(int n) => n.toString().padLeft(2, '0');
+    return '${dt.year}-${two(dt.month)}-${two(dt.day)} ${two(dt.hour)}:${two(dt.minute)}:00';
   }
 
   Future<void> _pickDate() async {
@@ -197,29 +232,49 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
   }
 
   bool get _canSubmit {
+    final hasRequiredFields = _selectedSenderId != null &&
+        _recipientController.text.trim().isNotEmpty &&
+        _messageController.text.trim().isNotEmpty;
+    if (!hasRequiredFields) return false;
     if (_sendOption == _SendOption.now) return true;
     return _selectedDate != null && _selectedTime != null;
   }
 
-  void _submit() {
+  Future<void> _submit() async {
     if (!_canSubmit) return;
+
     if (_sendOption == _SendOption.now) {
-      // TODO: submit widget.messageDraft immediately via the send-now notifier.
-    } else {
-      // TODO: submit widget.messageDraft + _selectedDate + _selectedTime + _repeat
-      // via the schedule-message notifier, e.g.:
-      // ref.read(scheduleSmsNotifier.notifier).scheduleMessage(
-      //   draft: widget.messageDraft,
-      //   date: _selectedDate!,
-      //   time: _selectedTime!,
-      //   repeat: _repeat,
-      // );
+      // No send-now endpoint exists yet (only create_schedule_sms, which
+      // requires a future schedule_date). Block rather than silently no-op.
+      context.showError(
+        message:
+            'Sending immediately isn\'t available yet — please schedule a time.',
+      );
+      return;
     }
-    Navigator.pop(context);
+
+    // _repeat is intentionally NOT sent — create_schedule_sms has no
+    // recurrence field. Recurring schedules aren't supported server-side yet.
+    final scheduleDate = _toApiDateTime(_selectedDate!, _selectedTime!);
+
+    ref.read(createScheduledSmsNotifier.notifier).createScheduledSms(
+          data: CreateScheduleSmsRequest(
+            senderId: _selectedSenderId!,
+            message: _messageController.text.trim(),
+            recipient: _recipientController.text.trim(),
+            scheduleDate: scheduleDate,
+          ),
+          onError: (error) {
+            context.showError(message: error);
+          },
+          onSuccess: (message) {
+            context.showSuccess(message: message);
+            Navigator.pop(context);
+          },
+        );
   }
 
   Widget _fieldBox({
-    required String label,
     required String value,
     required VoidCallback onTap,
     required IconData icon,
@@ -252,8 +307,63 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
     );
   }
 
+  InputDecoration _textFieldDecoration(String hint) {
+    return InputDecoration(
+      hintText: hint,
+      hintStyle: context.textTheme.s12w400
+          .copyWith(color: AppColors.black.withOpacity(0.4)),
+      filled: true,
+      fillColor: AppColors.primaryF5F7F9,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide.none,
+      ),
+    );
+  }
+
+  Widget _buildSenderIdDropdown() {
+    final listState = ref.watch(senderIdListNotifier);
+    final senderNames = listState.items.map((i) => i.senderId).toList();
+
+    if (listState.isLoading && senderNames.isEmpty) {
+      return Container(
+        height: 48,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        decoration: BoxDecoration(
+          color: AppColors.primaryF5F7F9,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const SizedBox(
+          height: 18,
+          width: 18,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+      );
+    }
+
+    return DropdownButtonFormField<String>(
+      initialValue:
+          senderNames.contains(_selectedSenderId) ? _selectedSenderId : null,
+      isExpanded: true,
+      decoration: _textFieldDecoration(
+        senderNames.isEmpty ? 'No sender IDs available' : 'Select a sender ID',
+      ),
+      items: senderNames
+          .map((id) => DropdownMenuItem(value: id, child: Text(id)))
+          .toList(),
+      onChanged: senderNames.isEmpty
+          ? null
+          : (value) => setState(() => _selectedSenderId = value),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isLoading =
+        ref.watch(createScheduledSmsNotifier.select((v) => v.isLoading));
+
     return Scaffold(
       appBar: CustomAppBar(
         leading: GestureDetector(
@@ -263,11 +373,31 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
         title: 'Schedule message',
       ),
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Text('Sender ID', style: context.textTheme.s12w400),
+              const VerticalSpacing(6),
+              _buildSenderIdDropdown(),
+              const VerticalSpacing(16),
+              Text('Recipient', style: context.textTheme.s12w400),
+              const VerticalSpacing(6),
+              TextField(
+                controller: _recipientController,
+                keyboardType: TextInputType.phone,
+                decoration: _textFieldDecoration('e.g 08012345678'),
+              ),
+              const VerticalSpacing(16),
+              Text('Message', style: context.textTheme.s12w400),
+              const VerticalSpacing(6),
+              TextField(
+                controller: _messageController,
+                maxLines: 4,
+                decoration: _textFieldDecoration('Type message here'),
+              ),
+              const VerticalSpacing(20),
               RadioListTile<_SendOption>(
                 contentPadding: EdgeInsets.zero,
                 value: _SendOption.now,
@@ -298,7 +428,6 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
                 Text('Date', style: context.textTheme.s12w400),
                 const VerticalSpacing(6),
                 _fieldBox(
-                  label: 'Date',
                   value: _selectedDate == null
                       ? 'dd/mm/yyyy'
                       : _formatDate(_selectedDate!),
@@ -309,7 +438,6 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
                 Text('Time', style: context.textTheme.s12w400),
                 const VerticalSpacing(6),
                 _fieldBox(
-                  label: 'Time',
                   value: _selectedTime == null
                       ? 'hh:mm'
                       : _formatTime(_selectedTime!),
@@ -329,8 +457,10 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
                     ],
                   ),
                 ),
+                // Note: _repeat is not currently sent to the server —
+                // create_schedule_sms has no recurrence field yet.
               ],
-              const Spacer(),
+              const VerticalSpacing(30),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
@@ -340,13 +470,22 @@ class _AddScheduleSmsViewState extends ConsumerState<AddScheduleSmsView> {
                         : AppColors.black.withOpacity(0.3),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onPressed: _canSubmit ? _submit : null,
-                  child: Text(
-                    _sendOption == _SendOption.now
-                        ? 'Send message'
-                        : 'Schedule message',
-                    style: const TextStyle(color: AppColors.white),
-                  ),
+                  onPressed: (_canSubmit && !isLoading) ? _submit : null,
+                  child: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.white,
+                          ),
+                        )
+                      : Text(
+                          _sendOption == _SendOption.now
+                              ? 'Send message'
+                              : 'Schedule message',
+                          style: const TextStyle(color: AppColors.white),
+                        ),
                 ),
               ),
             ],

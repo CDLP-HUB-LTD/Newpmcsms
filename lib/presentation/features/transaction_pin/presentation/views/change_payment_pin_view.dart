@@ -3,10 +3,17 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:pinput/pinput.dart';
+import 'package:pmcsms/core/extensions/build_context_extension.dart';
+import 'package:pmcsms/core/extensions/overlay_extension.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/transaction_pin/data/set_transaction_pin_request.dart';
+
+import 'package:pmcsms/presentation/features/transaction_pin/presentation/notifier/set_transaction_pin_notifier.dart';
+import 'package:pmcsms/presentation/features/transaction_pin/presentation/views/forgot_pin_request_view.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_button.dart';
+import 'package:pmcsms/presentation/general_widgets/page_loader.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
 class ChangePaymentPinView extends ConsumerStatefulWidget {
@@ -54,6 +61,27 @@ class _ChangePaymentPinViewState extends ConsumerState<ChangePaymentPinView> {
         _newPinController.text == _confirmPinController.text;
   }
 
+  void _submit() {
+    final data = TransactionPinRequest.update(
+      currentPin: _oldPinController.text.trim(),
+      newPin: _newPinController.text.trim(),
+      confirmNewPin: _confirmPinController.text.trim(),
+    );
+
+    ref.read(transactionPinNotifier.notifier).submit(
+          data: data,
+          onError: (error) {
+            // Surfaces server messages like an incorrect old pin, etc.
+            context.showError(message: error);
+          },
+          onSuccess: (message) {
+            context.hideOverLay();
+            context.showSuccess(message: message);
+            Navigator.of(context).pop();
+          },
+        );
+  }
+
   @override
   Widget build(BuildContext context) {
     final defaultPinTheme = PinTheme(
@@ -66,92 +94,98 @@ class _ChangePaymentPinViewState extends ConsumerState<ChangePaymentPinView> {
       ),
     );
 
+    final isLoading =
+        ref.watch(transactionPinNotifier.select((v) => v.isLoading));
+
     return Scaffold(
       appBar: const CustomAppBar(title: 'Change Payment Pin'),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Use secure numbers for your pin, pin must not contain numbers that can be repeated',
-                style: context.textTheme.s12w400
-                    .copyWith(color: AppColors.primary494949),
-              ),
-              const VerticalSpacing(20),
-
-              // Old Pin
-              _buildPinLabel('Old pin', _isObscureOldPin, () {
-                setState(() => _isObscureOldPin = !_isObscureOldPin);
-              }),
-              const VerticalSpacing(10),
-              Pinput(
-                controller: _oldPinController,
-                length: 4,
-                obscureText: _isObscureOldPin,
-                keyboardType: TextInputType.number,
-                defaultPinTheme: defaultPinTheme,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-              const VerticalSpacing(20),
-
-              // New Pin
-              _buildPinLabel('New pin', _isObscureNewPin, () {
-                setState(() => _isObscureNewPin = !_isObscureNewPin);
-              }),
-              const VerticalSpacing(10),
-              Pinput(
-                controller: _newPinController,
-                length: 4,
-                obscureText: _isObscureNewPin,
-                keyboardType: TextInputType.number,
-                defaultPinTheme: defaultPinTheme,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-              const VerticalSpacing(20),
-
-              // Confirm New Pin
-              _buildPinLabel('Confirm new pin', _isObscureConfirmPin, () {
-                setState(() => _isObscureConfirmPin = !_isObscureConfirmPin);
-              }),
-              const VerticalSpacing(10),
-              Pinput(
-                controller: _confirmPinController,
-                length: 4,
-                obscureText: _isObscureConfirmPin,
-                keyboardType: TextInputType.number,
-                defaultPinTheme: defaultPinTheme,
-                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-              ),
-              const VerticalSpacing(16),
-
-              // Forgot Pin
-              GestureDetector(
-                onTap: () {
-                  // Navigate to Forgot Pin Request View
-                },
-                child: Text(
-                  'Forgot pin?',
-                  style: context.textTheme.s12w500
-                      .copyWith(color: Colors.amber.shade800),
+      body: PageLoader(
+        isLoading: isLoading,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: EdgeInsets.symmetric(horizontal: 16.w, vertical: 10.h),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Use secure numbers for your pin, pin must not contain numbers that can be repeated',
+                  style: context.textTheme.s12w400
+                      .copyWith(color: AppColors.primary494949),
                 ),
-              ),
-              const VerticalSpacing(32),
+                const VerticalSpacing(20),
 
-              ValueListenableBuilder<bool>(
-                valueListenable: _isButtonEnabled,
-                builder: (context, isEnabled, _) {
-                  return CustomButton(
-                    text: 'Set new pin',
-                    backgroundColor: isEnabled
-                        ? const Color(0xFF9EA3FF)
-                        : const Color(0xFFC4C7FF),
-                    onPressed: isEnabled ? () {} : null,
-                  );
-                },
-              ),
-            ],
+                // Old Pin
+                _buildPinLabel('Old pin', _isObscureOldPin, () {
+                  setState(() => _isObscureOldPin = !_isObscureOldPin);
+                }),
+                const VerticalSpacing(10),
+                Pinput(
+                  controller: _oldPinController,
+                  length: 4,
+                  obscureText: _isObscureOldPin,
+                  keyboardType: TextInputType.number,
+                  defaultPinTheme: defaultPinTheme,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+                const VerticalSpacing(20),
+
+                // New Pin
+                _buildPinLabel('New pin', _isObscureNewPin, () {
+                  setState(() => _isObscureNewPin = !_isObscureNewPin);
+                }),
+                const VerticalSpacing(10),
+                Pinput(
+                  controller: _newPinController,
+                  length: 4,
+                  obscureText: _isObscureNewPin,
+                  keyboardType: TextInputType.number,
+                  defaultPinTheme: defaultPinTheme,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+                const VerticalSpacing(20),
+
+                // Confirm New Pin
+                _buildPinLabel('Confirm new pin', _isObscureConfirmPin, () {
+                  setState(() => _isObscureConfirmPin = !_isObscureConfirmPin);
+                }),
+                const VerticalSpacing(10),
+                Pinput(
+                  controller: _confirmPinController,
+                  length: 4,
+                  obscureText: _isObscureConfirmPin,
+                  keyboardType: TextInputType.number,
+                  defaultPinTheme: defaultPinTheme,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                ),
+                const VerticalSpacing(16),
+
+                // Forgot Pin
+                GestureDetector(
+                  onTap: () {
+                    context.pushNamed(ForgotPinRequestView.routeName);
+                  },
+                  child: Text(
+                    'Forgot pin?',
+                    style: context.textTheme.s12w500
+                        .copyWith(color: Colors.amber.shade800),
+                  ),
+                ),
+                const VerticalSpacing(32),
+
+                ValueListenableBuilder<bool>(
+                  valueListenable: _isButtonEnabled,
+                  builder: (context, isEnabled, _) {
+                    return CustomButton(
+                      text: 'Set new pin',
+                      backgroundColor: isEnabled
+                          ? const Color(0xFF9EA3FF)
+                          : const Color(0xFFC4C7FF),
+                      onPressed: isEnabled ? _submit : null,
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
         ),
       ),

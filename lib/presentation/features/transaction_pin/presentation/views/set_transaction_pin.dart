@@ -5,8 +5,8 @@ import 'package:pinput/pinput.dart';
 import 'package:pmcsms/core/extensions/overlay_extension.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
-import 'package:pmcsms/core/utils/enums.dart';
 import 'package:pmcsms/presentation/features/transaction_pin/data/set_transaction_pin_request.dart';
+
 import 'package:pmcsms/presentation/features/transaction_pin/presentation/notifier/set_transaction_pin_notifier.dart';
 import 'package:pmcsms/presentation/general_widgets/app_send_button.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
@@ -60,7 +60,7 @@ class _SetTransactionPinState extends ConsumerState<SetTransactionPin> {
   @override
   Widget build(BuildContext context) {
     final isLoading =
-        ref.watch(setTransactionPinNotifier.select((v) => v.state.isLoading));
+        ref.watch(transactionPinNotifier.select((v) => v.isLoading));
     return Scaffold(
       // ignore: prefer_const_constructors
       appBar: CustomAppBar(
@@ -169,19 +169,18 @@ class _SetTransactionPinState extends ConsumerState<SetTransactionPin> {
   }
 
   void setTransactionPin() {
-    final data = SetTransactionPinRequest(
-        process: 'pm_profile',
-        action: 'set_transact_pin',
-        currentPin: '000000',
-        newPin: _setPinController.text.trim(),
-        confirmNewPin: _confirmPinController.text.trim());
-    ref.read(setTransactionPinNotifier.notifier).setTransactionPin(
+    final data = TransactionPinRequest.set(
+      newPin: _setPinController.text.trim(),
+      confirmNewPin: _confirmPinController.text.trim(),
+    );
+    ref.read(transactionPinNotifier.notifier).submit(
         data: data,
         onError: (error) {
           context.showError(message: error);
         },
         onSuccess: (message) {
           context.showSuccess(message: message);
+          Navigator.of(context).pop();
         });
   }
 }

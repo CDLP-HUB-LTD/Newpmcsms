@@ -9,6 +9,7 @@ import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messag
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/voice_sms/presentation/view/voice_sms_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/presentation/view/whatsapp_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/presentation/widgets/messaging_options.dart';
+import 'package:pmcsms/presentation/features/history/views/history_view.dart';
 import 'package:pmcsms/presentation/general_widgets/app_options_button_widget.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
@@ -30,7 +31,12 @@ class _MessagesViewState extends ConsumerState<MessagesView> {
         actions: [
           Padding(
             padding: const EdgeInsets.only(right: 16),
-            child: SvgPicture.asset('assets/icons/clock.svg'),
+            child: GestureDetector(
+              onTap: () {
+                Navigator.pushNamed(context, HistoryView.routeName);
+              },
+              child: SvgPicture.asset('assets/icons/clock.svg'),
+            ),
           ),
         ],
       ),
@@ -64,15 +70,15 @@ class _MessagesViewState extends ConsumerState<MessagesView> {
     switch (index) {
       case 0:
         context.pushNamed<void>(SmsView.routeName);
+      // case 1:
+      //   context.pushNamed<void>(EmailView.routeName);
+      // case 2:
+      //   context.pushNamed<void>(VoiceSmsView.routeName);
+      // case 3:
+      //   context.pushNamed<void>(WhatsappView.routeName);
       case 1:
-        context.pushNamed<void>(EmailView.routeName);
-      case 2:
-        context.pushNamed<void>(VoiceSmsView.routeName);
-      case 3:
-        context.pushNamed<void>(WhatsappView.routeName);
-      case 4:
         context.pushNamed<void>(ScheduledSmsView.routeName);
-      case 5:
+      case 2:
         context.pushNamed<void>(DraftView.routeName);
 
       default:

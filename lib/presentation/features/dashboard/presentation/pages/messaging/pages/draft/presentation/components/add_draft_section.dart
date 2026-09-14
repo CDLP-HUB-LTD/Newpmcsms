@@ -4,6 +4,7 @@ import 'package:pmcsms/core/extensions/build_context_extension.dart';
 import 'package:pmcsms/core/extensions/overlay_extension.dart';
 import 'package:pmcsms/core/utils/enums.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/add_draft_request.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/draft_service_tab.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/components/add_drafts_text_widget.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/notifier/add_draft_notifier.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/view/draft_view.dart';
@@ -25,15 +26,26 @@ class _AddDraftSectionState extends ConsumerState<AddDraftSection> {
   final ValueNotifier<bool> _isAddDraftEnabled = ValueNotifier(false);
 
   late TextEditingController _titleController;
-
   late TextEditingController _messageController;
+
+  DraftServiceTab _service = DraftServiceTab.sms;
+  bool _serviceResolved = false;
 
   @override
   void initState() {
     _titleController = TextEditingController()..addListener(_validateInput);
-
     _messageController = TextEditingController()..addListener(_validateInput);
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_serviceResolved) {
+      final arg = ModalRoute.of(context)?.settings.arguments;
+      if (arg is DraftServiceTab) _service = arg;
+      _serviceResolved = true;
+    }
   }
 
   @override
@@ -55,8 +67,8 @@ class _AddDraftSectionState extends ConsumerState<AddDraftSection> {
     return PageLoader(
       isLoading: isLoading,
       child: Scaffold(
-        appBar: const CustomAppBar(
-          title: 'Add',
+        appBar: CustomAppBar(
+          title: _service == DraftServiceTab.voice ? 'Add Voice Draft' : 'Add',
         ),
         body: SafeArea(
             child: Padding(
@@ -98,7 +110,7 @@ class _AddDraftSectionState extends ConsumerState<AddDraftSection> {
     ref.read(addDraftsNotifier.notifier).addDrafts(
           data: AddDraftsRequests(
               process: 'pm_drafts',
-              action: 'add_draft',
+              action: _service.addAction,
               title: _titleController.text.trim(),
               message: _messageController.text.trim()),
           onError: (error) {

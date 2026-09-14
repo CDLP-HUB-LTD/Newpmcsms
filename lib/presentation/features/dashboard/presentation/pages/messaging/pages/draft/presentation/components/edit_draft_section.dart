@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:pmcsms/core/extensions/build_context_extension.dart';
 import 'package:pmcsms/core/extensions/overlay_extension.dart';
 import 'package:pmcsms/core/utils/enums.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/draft_service_tab.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/data/models/update_draft_request.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/components/add_drafts_text_widget.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/draft/presentation/notifier/update_draft_notifier.dart';
@@ -13,14 +14,17 @@ import 'package:pmcsms/presentation/general_widgets/page_loader.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
 
 class EditDraftSection extends ConsumerStatefulWidget {
-  const EditDraftSection(
-      {required this.title,
-      required this.message,
-      required this.draftId,
-      super.key});
+  const EditDraftSection({
+    required this.title,
+    required this.message,
+    required this.draftId,
+    required this.service,
+    super.key,
+  });
   final String title;
   final String message;
   final int draftId;
+  final DraftServiceTab service;
 
   @override
   ConsumerState<ConsumerStatefulWidget> createState() =>
@@ -107,7 +111,7 @@ class _EditDraftSectionState extends ConsumerState<EditDraftSection> {
     ref.read(updateDraftNotifier.notifier).updateDrafts(
           data: UpdateDraftRequest(
               process: 'pm_drafts',
-              action: 'edit_draft',
+              action: widget.service.editAction,
               draftId: widget.draftId,
               title: _titleController.text.trim(),
               message: _messageController.text.trim()),

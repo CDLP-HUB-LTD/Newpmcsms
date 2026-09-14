@@ -18,11 +18,17 @@ class GetPhoneBookNotifier
     return BaseState<GetAllContactsResponse>.initial();
   }
 
-  Future<void> getAllContacts() async {
+  Future<void> getAllContacts({
+    int start = 1,
+    int length = 50,
+  }) async {
     state = state.copyWith(state: LoadState.loading);
 
     try {
-      final value = await _getAllContactsRepository.getAllContacts();
+      final value = await _getAllContactsRepository.getAllContacts(
+        start: start,
+        length: length,
+      );
 
       if (!value.status) throw value.serverMessage.toString();
 

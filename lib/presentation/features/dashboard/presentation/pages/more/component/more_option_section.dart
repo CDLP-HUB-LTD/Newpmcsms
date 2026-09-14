@@ -11,7 +11,7 @@ import 'package:pmcsms/presentation/features/kyc/presentation/view/kyc_view.dart
 import 'package:pmcsms/presentation/features/manage_account/presentation/view/manage_account_view.dart';
 import 'package:pmcsms/presentation/features/notification/views/notification_settings.dart';
 import 'package:pmcsms/presentation/features/referral/views/referrals_view.dart';
-import 'package:pmcsms/presentation/features/reset_password/presentation/view/reset_password_view.dart';
+import 'package:pmcsms/presentation/features/reset_password/change_password/view/change_password_view.dart';
 import 'package:pmcsms/presentation/features/senderid/views/sender_id_view.dart';
 import 'package:pmcsms/presentation/features/transaction_pin/presentation/views/change_payment_pin_view.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
@@ -56,7 +56,7 @@ class MoreOptionSection extends StatelessWidget {
               const VerticalSpacing(20),
               OptionWidget(
                 icon: 'assets/icons/user_id.svg',
-                title: 'User ID',
+                title: 'SENDER ID',
                 onTap: () {
                   Navigator.pushNamed(context, SenderIdView.routeName);
                 },
@@ -116,9 +116,9 @@ class MoreOptionSection extends StatelessWidget {
             children: [
               OptionWidget(
                 icon: 'assets/icons/lock.svg',
-                title: 'Reset password',
+                title: 'Change password',
                 onTap: () {
-                  Navigator.pushNamed(context, ResetPasswordView.routeName);
+                  Navigator.pushNamed(context, ChangePasswordView.routeName);
                 },
               ),
               const VerticalSpacing(20),

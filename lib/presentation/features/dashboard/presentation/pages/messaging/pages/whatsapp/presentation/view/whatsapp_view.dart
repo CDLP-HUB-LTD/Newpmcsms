@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/presentation/view/whatsapp_msg_text_view.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/presentation/view/whatsapp_msg_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/whatsapp_report_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/whatsapp_template_view.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
@@ -32,14 +34,16 @@ class _WhatsappViewState extends ConsumerState<WhatsappView> {
                 context,
                 icon: Icons.chat_outlined,
                 title: 'Test Transactional Whatsapp MSG',
-                onTap: () => Navigator.pushNamed(context, '/whatsapp-msg-test'),
+                onTap: () =>
+                    Navigator.pushNamed(context, WhatsappMsgTestView.routeName),
               ),
               const VerticalSpacing(12),
               _buildMenuItem(
                 context,
                 icon: Icons.chat_bubble_outline,
                 title: 'Transactional Whatsapp MSG',
-                onTap: () => Navigator.pushNamed(context, '/whatsapp-msg'),
+                onTap: () =>
+                    Navigator.pushNamed(context, WhatsappMsgView.routeName),
               ),
               const VerticalSpacing(12),
               _buildMenuItem(

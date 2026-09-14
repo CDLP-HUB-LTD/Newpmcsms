@@ -1,4 +1,4 @@
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:pmcsms/presentation/features/analytics/view/analytics_view.dart';
 import 'package:pmcsms/presentation/features/buy_unit/presentation/view/buy_unit_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/dashboard.dart';
@@ -11,6 +11,8 @@ import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messag
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/scheduled_sms/presentation/view/scheduled_sms_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/sms/presentation/view/sms_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/voice_sms/presentation/view/voice_sms_view.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/presentation/view/whatsapp_msg_text_view.dart';
+import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/presentation/view/whatsapp_msg_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/presentation/view/whatsapp_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/whatsapp_report_view.dart';
 import 'package:pmcsms/presentation/features/dashboard/presentation/pages/messaging/pages/whatsapp/whatsapp_template_view.dart';
@@ -29,9 +31,12 @@ import 'package:pmcsms/presentation/features/manage_account/presentation/view/de
 import 'package:pmcsms/presentation/features/manage_account/presentation/view/manage_account_view.dart';
 import 'package:pmcsms/presentation/features/manage_account/presentation/view/profile_view.dart';
 import 'package:pmcsms/presentation/features/notification/views/notification_settings.dart';
+import 'package:pmcsms/presentation/features/notification/views/notifications_view.dart';
 import 'package:pmcsms/presentation/features/onboarding/presentation/onboarding_view.dart';
+import 'package:pmcsms/presentation/features/phonebook/presentation/view/edit_group_view.dart';
 import 'package:pmcsms/presentation/features/phonebook/presentation/view/phonebook_view.dart';
 import 'package:pmcsms/presentation/features/referral/views/referrals_view.dart';
+import 'package:pmcsms/presentation/features/reset_password/change_password/view/change_password_view.dart';
 import 'package:pmcsms/presentation/features/reset_password/presentation/view/reset_password_success_view.dart';
 import 'package:pmcsms/presentation/features/reset_password/presentation/view/reset_password_view.dart';
 import 'package:pmcsms/presentation/features/senderid/views/create_sender_id_view.dart';
@@ -58,13 +63,14 @@ class AppRouter {
     SignUpSuccessView.routeName: (context) => const SignUpSuccessView(),
     LoginView.routeName: (context) => const LoginView(),
     ForgotPasswordView.routeName: (context) => const ForgotPasswordView(),
-    ResetPasswordView.routeName: (context) => const ResetPasswordView(),
+    // ResetPasswordView removed from this flat map — it needs the real
+    // otpCode the user just verified, which this Map<String, WidgetBuilder>
+    // shape can't carry. It's routed via onGenerateRoute below instead.
     ResetPasswordSuccessView.routeName: (context) =>
         const ResetPasswordSuccessView(),
     Dashboard.routeName: (context) => const Dashboard(),
     DraftView.routeName: (context) => const DraftView(),
     EmailView.routeName: (context) => const EmailView(),
-    ScheduledSmsView.routeName: (context) => const ScheduledSmsView(),
     SmsView.routeName: (context) => const SmsView(),
     VoiceSmsView.routeName: (context) => const VoiceSmsView(),
     WhatsappView.routeName: (context) => const WhatsappView(),
@@ -76,9 +82,12 @@ class AppRouter {
     TransferFundsView.routeName: (context) => const TransferFundsView(),
     AddContactView.routeName: (context) => const AddContactView(),
     ManageAccountView.routeName: (context) => const ManageAccountView(),
+    ChangePasswordView.routeName: (context) => const ChangePasswordView(),
     DeleteAccountView.routeName: (context) => const DeleteAccountView(),
     ProfileView.routeName: (context) => const ProfileView(),
     KycView.routeName: (context) => const KycView(),
+    // inside your routes Map configuration:
+    ScheduledSmsView.routeName: (context) => const ScheduledSmsView(),
 
     BvnVerificationScreen.routeName: (context) => const BvnVerificationScreen(),
     NinVerificationScreen.routeName: (context) => const NinVerificationScreen(),
@@ -101,11 +110,91 @@ class AppRouter {
     BuyUnitView.routeName: (context) => const BuyUnitView(),
     AnalyticsView.routeName: (context) => const AnalyticsView(),
     HistoryView.routeName: (context) => const HistoryView(),
-    MessageDetailsView.routeName: (context) => const MessageDetailsView(),
+    WhatsappMsgTestView.routeName: (context) => const WhatsappMsgTestView(),
+    WhatsappMsgView.routeName: (context) => const WhatsappMsgView(),
+
+    EditGroupView.routeName: (context) => const EditGroupView(),
+    NotificationsView.routeName: (context) => const NotificationsView(),
+    // MessageDetailsView removed from this flat map — it needs a real
+    // smsId argument, which this Map<String, WidgetBuilder> shape can't
+    // carry. It's routed via onGenerateRoute below instead.
+
     // Sender ID module routes
     SenderIdView.routeName: (context) => const SenderIdView(),
     CreateSenderIdView.routeName: (context) => const CreateSenderIdView(),
     OtpVerificationView.routeName: (context) => const OtpVerificationView(),
   };
+
   static Map<String, Widget Function(BuildContext)> get routes => _routes;
+
+  /// Handles routes that need arguments (MessageDetailsView, ResetPasswordView).
+  /// Wire this up alongside [routes] on your MaterialApp:
+  ///
+  /// ```dart
+  /// MaterialApp(
+  ///   routes: AppRouter.routes,
+  ///   onGenerateRoute: AppRouter.onGenerateRoute,
+  ///   ...
+  /// )
+  /// ```
+  ///
+  /// Navigate to MessageDetailsView with:
+  /// ```dart
+  /// Navigator.of(context).pushNamed(
+  ///   MessageDetailsView.routeName,
+  ///   arguments: smsId, // an int
+  /// );
+  /// ```
+  ///
+  /// Navigate to ResetPasswordView with the OTP the user just verified:
+  /// ```dart
+  /// Navigator.of(context).pushNamed(
+  ///   ResetPasswordView.routeName,
+  ///   arguments: otpCode, // a String, e.g. from your OTP-entry screen
+  /// );
+  /// ```
+  static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
+    switch (settings.name) {
+      case MessageDetailsView.routeName:
+        final args = settings.arguments;
+        final smsId = args is int ? args : int.tryParse('$args');
+
+        if (smsId == null) {
+          return MaterialPageRoute(
+            builder: (_) => const Scaffold(
+              body: Center(child: Text('Missing or invalid message id')),
+            ),
+            settings: settings,
+          );
+        }
+
+        return MaterialPageRoute(
+          builder: (_) => MessageDetailsView(smsId: smsId),
+          settings: settings,
+        );
+
+      case ResetPasswordView.routeName:
+        final otpCode = settings.arguments;
+
+        if (otpCode is! String || otpCode.isEmpty) {
+          return MaterialPageRoute(
+            builder: (_) => const Scaffold(
+              body: Center(child: Text('Missing OTP code')),
+            ),
+            settings: settings,
+          );
+        }
+
+        return MaterialPageRoute(
+          builder: (_) => ResetPasswordView(otpCode: otpCode),
+          settings: settings,
+        );
+
+      default:
+        // Not one of ours — let MaterialApp fall through to its
+        // unknown-route handling (or `routes` will have already matched
+        // it before onGenerateRoute is even called).
+        return null;
+    }
+  }
 }

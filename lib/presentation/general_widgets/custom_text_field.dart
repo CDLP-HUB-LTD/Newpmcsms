@@ -14,6 +14,7 @@ class CustomTextField extends StatelessWidget {
     this.maxLines = 1,
     this.readOnly = false,
     this.onTap,
+    this.keyboardType,
   });
 
   final String? label;
@@ -24,6 +25,7 @@ class CustomTextField extends StatelessWidget {
   final int maxLines;
   final bool readOnly;
   final VoidCallback? onTap;
+  final TextInputType? keyboardType;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +45,7 @@ class CustomTextField extends StatelessWidget {
           maxLines: maxLines,
           readOnly: readOnly,
           onTap: onTap,
+          keyboardType: keyboardType,
           style: context.textTheme.s14w400,
           decoration: InputDecoration(
             hintText: hintText,

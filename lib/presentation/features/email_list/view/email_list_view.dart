@@ -1,14 +1,15 @@
 // lib/presentation/features/email_list/presentation/view/email_list_view.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:pmcsms/core/extensions/build_context_extension.dart';
 import 'package:pmcsms/core/extensions/text_theme_extension.dart';
 import 'package:pmcsms/core/theme/app_colors.dart';
-import 'package:pmcsms/presentation/features/dashboard/presentation/pages/contact/presentation/view/add_contact_view.dart';
-import 'package:pmcsms/presentation/features/email_list/presentation/models/email_list_model.dart';
+import 'package:pmcsms/core/utils/enums.dart';
+import 'package:pmcsms/presentation/features/email_list/presentation/models/email_address_book_response.dart';
+import 'package:pmcsms/presentation/features/email_list/presentation/notifier/email_list_notifier.dart';
+import 'package:pmcsms/presentation/features/email_list/view/add_email_contact_view.dart';
 import 'package:pmcsms/presentation/features/email_list/view/add_to_group_view.dart';
 import 'package:pmcsms/presentation/features/email_list/view/delete_contact_dialogue.dart';
-import 'package:pmcsms/presentation/features/email_list/view/edit_contact_view.dart';
+import 'package:pmcsms/presentation/features/email_list/view/edit_email_contact_view.dart';
 import 'package:pmcsms/presentation/features/email_list/view/group_views.dart';
 import 'package:pmcsms/presentation/general_widgets/custom_app_bar.dart';
 import 'package:pmcsms/presentation/general_widgets/spacing.dart';
@@ -30,26 +31,24 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
   _EmailListTab _tab = _EmailListTab.contacts;
   bool _isManageMode = false;
 
-  // TODO: replace with real contacts from a provider, e.g.
-  // ref.watch(emailContactsNotifier.select((v) => v.contacts))
-  final List<EmailContact> _contacts = [
-    const EmailContact(
-        id: '1', name: 'Boluwatife Ogunwale', email: 'boluwatifeO@gmail.com'),
-    const EmailContact(
-        id: '1', name: 'Boluwatife Ogunwale', email: 'boluwatifeO@gmail.com'),
-    const EmailContact(
-        id: '1', name: 'Boluwatife Ogunwale', email: 'boluwatifeO@gmail.com'),
-    const EmailContact(
-        id: '1', name: 'Boluwatife Ogunwale', email: 'boluwatifeO@gmail.com'),
-    const EmailContact(
-        id: '1', name: 'Boluwatife Ogunwale', email: 'boluwatifeO@gmail.com'),
-    const EmailContact(
-        id: '1', name: 'Boluwatife Ogunwale', email: 'boluwatifeO@gmail.com'),
-    const EmailContact(
-        id: '1', name: 'Boluwatife Ogunwale', email: 'boluwatifeO@gmail.com'),
-  ];
-
   final Set<int> _selectedIndexes = {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(emailListNotifier.notifier).fetchContacts(
+            start: 1,
+            length: 50,
+            onError: (error) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(error)),
+              );
+            },
+          );
+    });
+  }
 
   @override
   void dispose() {
@@ -75,8 +74,6 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
                 child: _tab == _EmailListTab.contacts
                     ? _buildContactsList()
                     : const GroupsView(),
-                // ? _buildContactsList()
-                //  : _buildGroupsPlaceholder(),
               ),
             ],
           ),
@@ -87,8 +84,21 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
               backgroundColor: AppColors.primaryColor,
               shape: const CircleBorder(),
               elevation: 0,
-              onPressed: () {
-                context.pushNamed(AddContactView.routeName);
+              onPressed: () async {
+                await showModalBottomSheet<void>(
+                  context: context,
+                  isScrollControlled: true,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(8)),
+                  ),
+                  builder: (_) => Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                    ),
+                    child: const AddEmailContactView(),
+                  ),
+                );
               },
               child: const Icon(Icons.add, color: AppColors.white),
             )
@@ -145,11 +155,30 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
         ),
         contentPadding: const EdgeInsets.symmetric(vertical: 0),
       ),
+      // NOTE: search is client-side only right now (filters the fetched
+      // page). If contacts get large, this should hit a search param on
+      // the endpoint instead — none was provided.
+      onChanged: (_) => setState(() {}),
     );
+  }
+
+  List<EmailAddressBookItem> _filteredContacts(
+      List<EmailAddressBookItem> contacts) {
+    final query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) return contacts;
+    return contacts.where((c) {
+      final name = (c.ownerName ?? '').toLowerCase();
+      final email = (c.addressBook ?? '').toLowerCase();
+      return name.contains(query) || email.contains(query);
+    }).toList();
   }
 
   // ── CONTACTS LIST ────────────────────────────────────────────────────────
   Widget _buildContactsList() {
+    final emailListState = ref.watch(emailListNotifier);
+    final isLoading = emailListState.state == LoadState.loading;
+    final contacts = _filteredContacts(emailListState.contacts);
+
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(8),
@@ -165,7 +194,7 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${_contacts.length} Contacts',
+                '${contacts.length} Contacts',
                 style: context.textTheme.s14w600,
               ),
               Row(
@@ -196,12 +225,12 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
               alignment: Alignment.centerRight,
               child: InkWell(
                 onTap: () => setState(() {
-                  if (_selectedIndexes.length == _contacts.length) {
+                  if (_selectedIndexes.length == contacts.length) {
                     _selectedIndexes.clear();
                   } else {
                     _selectedIndexes
                       ..clear()
-                      ..addAll(List.generate(_contacts.length, (i) => i));
+                      ..addAll(List.generate(contacts.length, (i) => i));
                   }
                 }),
                 child: Container(
@@ -217,7 +246,8 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
                       Text('Select all', style: context.textTheme.s12w400),
                       const SizedBox(width: 6),
                       Icon(
-                        _selectedIndexes.length == _contacts.length
+                        _selectedIndexes.length == contacts.length &&
+                                contacts.isNotEmpty
                             ? Icons.check_circle
                             : Icons.check_circle_outline,
                         size: 16,
@@ -231,60 +261,95 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
           ],
           const VerticalSpacing(8),
           Expanded(
-            child: ListView.separated(
-              itemCount: _contacts.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, index) {
-                final contact = _contacts[index];
-                return _ContactListTile(
-                  contact: contact,
-                  index: index,
-                  isManageMode: _isManageMode,
-                  isSelected: _selectedIndexes.contains(index),
-                  onSelectToggle: () => setState(() {
-                    if (_selectedIndexes.contains(index)) {
-                      _selectedIndexes.remove(index);
-                    } else {
-                      _selectedIndexes.add(index);
-                    }
-                  }),
-                  onEdit: () async {
-                    final updated = await Navigator.push<EmailContact>(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => EditContactView(contact: contact)),
-                    );
-                    // TODO: if updated != null, refresh via your contacts notifier
-                  },
-                  onAddToGroup: () async {
-                    await Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                          builder: (_) => AddToGroupView(contact: contact)),
-                    );
-                  },
-                  onDelete: () async {
-                    final confirmed = await showDeleteContactDialog(context,
-                        contactName: contact.name);
-                    if (confirmed == true) {
-                      // TODO: ref.read(contactsNotifier.notifier).delete(contact.id)
-                    }
-                  },
-                );
-              },
-            ),
+            child: isLoading && contacts.isEmpty
+                ? const Center(child: CircularProgressIndicator())
+                : contacts.isEmpty
+                    ? Center(
+                        child: Text(
+                          'No contacts yet',
+                          style: context.textTheme.s12w400
+                              .copyWith(color: Colors.grey),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: contacts.length,
+                        separatorBuilder: (_, __) => const Divider(height: 1),
+                        itemBuilder: (_, index) {
+                          final contact = contacts[index];
+                          return _ContactListTile(
+                            contact: contact,
+                            index: index,
+                            isManageMode: _isManageMode,
+                            isSelected: _selectedIndexes.contains(index),
+                            onSelectToggle: () => setState(() {
+                              if (_selectedIndexes.contains(index)) {
+                                _selectedIndexes.remove(index);
+                              } else {
+                                _selectedIndexes.add(index);
+                              }
+                            }),
+                            onEdit: () async {
+                              await showModalBottomSheet<void>(
+                                context: context,
+                                isScrollControlled: true,
+                                shape: const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.vertical(
+                                      top: Radius.circular(8)),
+                                ),
+                                builder: (_) => Padding(
+                                  padding: EdgeInsets.only(
+                                    bottom: MediaQuery.of(context)
+                                        .viewInsets
+                                        .bottom,
+                                  ),
+                                  child: EditEmailContactView(
+                                    addressBookId: contact.addressBookId ?? 0,
+                                    groupId: contact.groupId ?? 0,
+                                    initialName: contact.ownerName ?? '',
+                                    initialEmail: contact.addressBook ?? '',
+                                  ),
+                                ),
+                              );
+                            },
+                            onAddToGroup: () async {
+                              await Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                    builder: (_) =>
+                                        AddToGroupView(contact: contact)),
+                              );
+                            },
+                            onDelete: () async {
+                              final confirmed = await showDeleteContactDialog(
+                                  context,
+                                  contactName: contact.ownerName ?? '');
+                              if (confirmed == true &&
+                                  contact.addressBookId != null) {
+                                final success = await ref
+                                    .read(emailListNotifier.notifier)
+                                    .deleteContact(
+                                      addressBookId: contact.addressBookId!,
+                                      onError: (error) {
+                                        if (!mounted) return;
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(
+                                          SnackBar(content: Text(error)),
+                                        );
+                                      },
+                                    );
+                                if (success && mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                        content: Text('Contact deleted')),
+                                  );
+                                }
+                              }
+                            },
+                          );
+                        },
+                      ),
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildGroupsPlaceholder() {
-    // TODO: implement the Groups tab (group list, group details, add group)
-    return Center(
-      child: Text(
-        'Groups coming soon',
-        style: context.textTheme.s14w400.copyWith(color: Colors.grey[600]),
       ),
     );
   }
@@ -318,7 +383,8 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
                 leading: const Icon(Icons.description_outlined),
                 title: const Text('CSV'),
                 onTap: () {
-                  // TODO: export contacts as CSV
+                  // TODO: export contacts as CSV — no endpoint was provided
+                  // for this yet.
                   Navigator.pop(context);
                 },
               ),
@@ -327,7 +393,8 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
                 leading: const Icon(Icons.picture_as_pdf_outlined),
                 title: const Text('PDF'),
                 onTap: () {
-                  // TODO: export contacts as PDF
+                  // TODO: export contacts as PDF — no endpoint was provided
+                  // for this yet.
                   Navigator.pop(context);
                 },
               ),
@@ -338,8 +405,6 @@ class _EmailListViewState extends ConsumerState<EmailListView> {
     );
   }
 }
-
-// Removed duplicate EmailContact class. Use the one from the imported model.
 
 class _ContactListTile extends StatelessWidget {
   const _ContactListTile({
@@ -353,7 +418,7 @@ class _ContactListTile extends StatelessWidget {
     required this.onDelete,
   });
 
-  final EmailContact contact;
+  final EmailAddressBookItem contact;
   final int index;
   final bool isManageMode;
   final bool isSelected;
@@ -372,9 +437,9 @@ class _ContactListTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final name = contact.ownerName?.trim() ?? '';
     final initials =
-        contact.name.trim().isEmpty ? '?' : contact.name.trim().substring(0, 2);
-
+        name.isEmpty ? '?' : name.substring(0, name.length >= 2 ? 2 : 1);
     return ListTile(
       contentPadding: EdgeInsets.zero,
       onTap: isManageMode ? onSelectToggle : null,
@@ -382,8 +447,9 @@ class _ContactListTile extends StatelessWidget {
         backgroundColor: _avatarColors[index % _avatarColors.length],
         child: Text(initials, style: const TextStyle(color: Colors.white)),
       ),
-      title: Text(contact.name, style: context.textTheme.s14w500),
-      subtitle: Text(contact.email, style: context.textTheme.s12w400),
+      title: Text(name, style: context.textTheme.s14w500),
+      subtitle:
+          Text(contact.addressBook ?? '', style: context.textTheme.s12w400),
       trailing: isManageMode
           ? Icon(
               isSelected ? Icons.check_circle : Icons.circle_outlined,

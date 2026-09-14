@@ -17,7 +17,8 @@ class GetDraftByIdNotifier
     return GetDraftByIdNotifierState.initial();
   }
 
-  Future<void> getDraftById({required int draftId}) async {
+  Future<void> getDraftById(
+      {required int draftId, required String action}) async {
     state = state.copyWith(getDraftByIdState: LoadState.loading);
     final data = GetDraftByIdRequest(
         process: 'pm_drafts', action: 'view_draft', draftId: draftId);

@@ -1,7 +1,60 @@
+// lib/.../draft/data/models/get_all_drafts_response.dart
+class AllDraftsData {
+  final int? draftId;
+  final String? draftTitle;
+  final String? draftMessage;
+  final String? dateCreated;
+
+  AllDraftsData({
+    this.draftId,
+    this.draftTitle,
+    this.draftMessage,
+    this.dateCreated,
+  });
+
+  factory AllDraftsData.fromJson(Map<String, dynamic> json) => AllDraftsData(
+        draftId: json['draft_id'] is int
+            ? json['draft_id']
+            : int.tryParse(json['draft_id']?.toString() ?? ''),
+        draftTitle: json['draft_title']?.toString(),
+        draftMessage: json['draft_message']?.toString(),
+        dateCreated: json['date_created']?.toString(),
+      );
+}
+
+class DraftsPagination {
+  final int totalRecords;
+  final int totalPages;
+  final int currentPage;
+  final int limit;
+
+  DraftsPagination({
+    this.totalRecords = 0,
+    this.totalPages = 0,
+    this.currentPage = 1,
+    this.limit = 20,
+  });
+
+  factory DraftsPagination.fromJson(Map<String, dynamic> json) =>
+      DraftsPagination(
+        totalRecords: _asInt(json['total_records']),
+        totalPages: _asInt(json['total_pages']),
+        currentPage: _asInt(json['current_page']) == 0
+            ? 1
+            : _asInt(json['current_page']),
+        limit: _asInt(json['limit']) == 0 ? 20 : _asInt(json['limit']),
+      );
+
+  static int _asInt(dynamic v) =>
+      v is int ? v : int.tryParse(v?.toString() ?? '') ?? 0;
+}
+
+/// Wraps the nested `data: { data: [...], pagination: {...} }` shape.
 class GetAllDraftsResponse {
   final String? serverMessage;
   final bool? status;
   final List<AllDraftsData>? data;
+  final DraftsPagination? pagination;
   final List<dynamic>? dataResult;
   final List<dynamic>? errorData;
   final String? textStatus;
@@ -11,119 +64,48 @@ class GetAllDraftsResponse {
     this.serverMessage,
     this.status,
     this.data,
+    this.pagination,
     this.dataResult,
     this.errorData,
     this.textStatus,
     this.error,
   });
 
-  GetAllDraftsResponse copyWith({
-    String? serverMessage,
-    bool? status,
-    List<AllDraftsData>? data,
-    List<dynamic>? dataResult,
-    List<dynamic>? errorData,
-    String? textStatus,
-    dynamic error,
-  }) =>
-      GetAllDraftsResponse(
-        serverMessage: serverMessage ?? this.serverMessage,
-        status: status ?? this.status,
-        data: data ?? this.data,
-        dataResult: dataResult ?? this.dataResult,
-        errorData: errorData ?? this.errorData,
-        textStatus: textStatus ?? this.textStatus,
-        error: error ?? this.error,
-      );
+  factory GetAllDraftsResponse.fromJson(Map<String, dynamic> json) {
+    final inner = json['data'];
+    List<AllDraftsData> list = [];
+    DraftsPagination? pagination;
 
-  factory GetAllDraftsResponse.fromJson(Map<String, dynamic> json) =>
-      GetAllDraftsResponse(
-        serverMessage: json["server_message"],
-        status: json["status"],
-        data: json["data"] == null
-            ? []
-            : List<AllDraftsData>.from(
-                json["data"]!.map((x) => AllDraftsData.fromJson(x))),
-        dataResult: json["data_result"] == null
-            ? []
-            : List<dynamic>.from(json["data_result"]!.map((x) => x)),
-        errorData: json["error_data"] == null
-            ? []
-            : List<dynamic>.from(json["error_data"]!.map((x) => x)),
-        textStatus: json["text_status"],
-        error: json["error"],
-      );
+    if (inner is Map<String, dynamic>) {
+      // New nested shape: { data: [...], pagination: {...} }
+      if (inner['data'] is List) {
+        list = List<AllDraftsData>.from(
+            (inner['data'] as List).map((x) => AllDraftsData.fromJson(x)));
+      }
+      if (inner['pagination'] is Map<String, dynamic>) {
+        pagination = DraftsPagination.fromJson(inner['pagination']);
+      }
+    } else if (inner is List) {
+      // Defensive fallback in case an older flat-array shape is ever
+      // returned again (e.g. by view_draft's error responses, which send
+      // "data": []).
+      list =
+          List<AllDraftsData>.from(inner.map((x) => AllDraftsData.fromJson(x)));
+    }
 
-  Map<String, dynamic> toJson() => {
-        "server_message": serverMessage,
-        "status": status,
-        "data": data == null
-            ? []
-            : List<dynamic>.from(data!.map((x) => x.toJson())),
-        "data_result": dataResult == null
-            ? []
-            : List<dynamic>.from(dataResult!.map((x) => x)),
-        "error_data": errorData == null
-            ? []
-            : List<dynamic>.from(errorData!.map((x) => x)),
-        "text_status": textStatus,
-        "error": error,
-      };
-}
-
-class AllDraftsData {
-  final int? draftId;
-  final int? draftUserId;
-  final String? draftTitle;
-  final String? draftMessage;
-  final DateTime? dateCreated;
-  final DateTime? dateUpdated;
-
-  AllDraftsData({
-    this.draftId,
-    this.draftUserId,
-    this.draftTitle,
-    this.draftMessage,
-    this.dateCreated,
-    this.dateUpdated,
-  });
-
-  AllDraftsData copyWith({
-    int? draftId,
-    int? draftUserId,
-    String? draftTitle,
-    String? draftMessage,
-    DateTime? dateCreated,
-    DateTime? dateUpdated,
-  }) =>
-      AllDraftsData(
-        draftId: draftId ?? this.draftId,
-        draftUserId: draftUserId ?? this.draftUserId,
-        draftTitle: draftTitle ?? this.draftTitle,
-        draftMessage: draftMessage ?? this.draftMessage,
-        dateCreated: dateCreated ?? this.dateCreated,
-        dateUpdated: dateUpdated ?? this.dateUpdated,
-      );
-
-  factory AllDraftsData.fromJson(Map<String, dynamic> json) => AllDraftsData(
-        draftId: json["draft_id"],
-        draftUserId: json["draft_user_id"],
-        draftTitle: json["draft_title"],
-        draftMessage: json["draft_message"],
-        dateCreated: json["date_created"] == null
-            ? null
-            : DateTime.parse(json["date_created"]),
-        dateUpdated: json["date_updated"] == null
-            ? null
-            : DateTime.parse(json["date_updated"]),
-      );
-
-  Map<String, dynamic> toJson() => {
-        "draft_id": draftId,
-        "draft_user_id": draftUserId,
-        "draft_title": draftTitle,
-        "draft_message": draftMessage,
-        "date_created": dateCreated?.toIso8601String(),
-        "date_updated": dateUpdated?.toIso8601String(),
-      };
+    return GetAllDraftsResponse(
+      serverMessage: json['server_message'],
+      status: json['status'],
+      data: list,
+      pagination: pagination,
+      dataResult: json['data_result'] == null
+          ? []
+          : List<dynamic>.from(json['data_result']),
+      errorData: json['error_data'] == null
+          ? []
+          : List<dynamic>.from(json['error_data']),
+      textStatus: json['text_status'],
+      error: json['error'],
+    );
+  }
 }

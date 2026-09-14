@@ -6,5 +6,5 @@ class StagingEnv implements BaseEnv {
   static final StagingEnv _instance = StagingEnv._internal();
 
   @override
-  String get baseUrl => 'https://demo.autobiz.app';
+  String get baseUrl => 'https://prof.autobiz.app';
 }

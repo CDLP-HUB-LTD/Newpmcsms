@@ -16,7 +16,7 @@ class GetBalanceRepository {
     try {
       final response = await _dio.get(
         '/pmcsms.php',
-        queryParameters: getBalanceRequest.toJson(), // ✅ not data:
+        queryParameters: getBalanceRequest.toJson(),
       );
       final balanceResponse =
           GetBalanceResponse.fromJson(response.data as Map<String, dynamic>);
