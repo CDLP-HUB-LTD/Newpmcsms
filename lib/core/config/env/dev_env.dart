@@ -7,5 +7,5 @@ class DevEnv implements BaseEnv {
 
   @override
   // If your dev team uses a different staging link, swap it here. Otherwise use production:
-  String get baseUrl => 'https://prof.autobiz.app';
+  String get baseUrl => 'https://pmcsms.com';
 }

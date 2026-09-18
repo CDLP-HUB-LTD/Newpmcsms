@@ -6,5 +6,5 @@ class ProdEnv implements BaseEnv {
   static final ProdEnv _instance = ProdEnv._internal();
 
   @override
-  String get baseUrl => 'https://prof.autobiz.app';
+  String get baseUrl => 'https://pmcsms.com';
 }

@@ -22,7 +22,7 @@ class DevEnv implements BaseEnv {
   static final DevEnv _instance = DevEnv._internal();
 
   @override
-  String get baseUrl => 'https://pmcsms.php'; // Local emulator address loopback
+  String get baseUrl => 'https://pmcsms.com'; // Local emulator address loopback
 }
 
 // --- Staging Environment ---
@@ -33,7 +33,7 @@ class StagingEnv implements BaseEnv {
 
   @override
   String get baseUrl =>
-      'https://pmcsms.php'; // Replace with your actual staging URL if different
+      'https://pmcsms.com'; // Replace with your actual staging URL if different
 }
 
 // --- Prod Environment ---
